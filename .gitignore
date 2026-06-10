@@ -70,3 +70,8 @@ captures/
 # Logs
 *.log
 logs/
+
+# Swift / SwiftPM
+.build/
+*.app/
+.swiftpm/

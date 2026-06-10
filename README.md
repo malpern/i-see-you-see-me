@@ -1,6 +1,37 @@
 # i-see-you-see-me
 
-A real-time presence and attention sensing platform built on the [OAK-D Lite](https://shop.luxonis.com/products/oak-d-lite) depth camera.
+A real-time presence and attention sensing platform built on the [OAK-D Lite](https://shop.luxonis.com/products/oak-d-lite) depth camera — with attention math and on-device AI narration running natively on macOS.
+
+Built for the WWDC26 YC hackathon.
+
+## Quick Start
+
+```bash
+# Menu bar app (macOS 26+, Apple Silicon)
+cd app && MENU_BAR_APP=1 ./Scripts/package_app.sh release && open ISeeYou.app
+
+# OAK-D sensor service (optional — app falls back to the built-in camera)
+cd sensor && uv sync && uv run oak-sensor          # or --mock without hardware
+```
+
+Then pick "OAK-D Lite" in the menu bar app's sensor picker.
+
+## How It Works
+
+```
+OAK-D Lite ──(DepthAI, Python)──► frames + depth over WebSocket ─┐
+                                                                 ├─► Vision framework head pose
+Built-in camera ──(AVFoundation)─────────────────────────────────┘        │
+                                                                          ▼
+                                                  AttentionEngine (hysteresis + dwell timers)
+                                                                          │ semantic events
+                                                                          ▼
+                                      menu bar UI + on-device Foundation Models narration
+```
+
+- **Sensors produce observations, never interpretations** — the Python service ships JPEG frames and a median depth scalar, nothing else.
+- **Attention estimation is a swappable protocol** — today it's Vision-framework head pose (`VisionHeadPoseEstimator`); the WWDC26 multimodal Foundation Models estimator ([MultimodalAttentionEstimator.swift](app/Sources/ISeeYou/Narration/MultimodalAttentionEstimator.swift)) compiles under the Xcode 27 SDK and drops in behind the same protocol on macOS 27.
+- **Consumers see only semantic events** (`person_entered`, `glance`, `attention_held`, …) — and the narration layer proves it: Apple's on-device foundation model describes your engagement from the event log alone, never seeing a single frame.
 
 The OAK-D Lite is treated as a smart sensor that produces observations. The host software is responsible for interpretation, emitting high-level semantic events like `look_started`, `attention_held`, and `person_entered` — never raw landmarks or depth maps.
 

@@ -1,0 +1,21 @@
+[project]
+name = "oak-sensor"
+version = "0.1.0"
+description = "OAK-D Lite sensor service: streams RGB frames + depth observations over WebSocket"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "depthai>=2.24",
+    "websockets>=12.0",
+    "numpy>=1.26",
+    "opencv-python-headless>=4.9",
+]
+
+[project.scripts]
+oak-sensor = "oak_sensor.main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oak_sensor"]
