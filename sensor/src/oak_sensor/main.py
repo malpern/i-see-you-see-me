@@ -68,50 +68,37 @@ def central_median_depth(depth_frame: np.ndarray) -> float | None:
 
 
 async def oak_loop() -> None:
+    # DepthAI v3 API: Camera nodes with requestOutput, queues created on
+    # node outputs directly (XLinkOut is gone).
     import depthai as dai
 
     pipeline = dai.Pipeline()
 
-    cam = pipeline.create(dai.node.ColorCamera)
-    cam.setPreviewSize(640, 360)
-    cam.setInterleaved(False)
-    cam.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
-    cam.setFps(FPS)
+    cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+    q_rgb = cam.requestOutput((640, 360), dai.ImgFrame.Type.BGR888i, fps=FPS).createOutputQueue(
+        maxSize=2, blocking=False
+    )
 
-    mono_left = pipeline.create(dai.node.MonoCamera)
-    mono_right = pipeline.create(dai.node.MonoCamera)
-    mono_left.setBoardSocket(dai.CameraBoardSocket.CAM_B)
-    mono_right.setBoardSocket(dai.CameraBoardSocket.CAM_C)
-    mono_left.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
-    mono_right.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
-
+    mono_left = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B)
+    mono_right = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_C)
     stereo = pipeline.create(dai.node.StereoDepth)
-    stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
-    stereo.setLeftRightCheck(True)
-    mono_left.out.link(stereo.left)
-    mono_right.out.link(stereo.right)
+    # FACE preset: tuned for short-range person/face depth — exactly our use case.
+    stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.FACE)
+    mono_left.requestOutput((640, 400)).link(stereo.left)
+    mono_right.requestOutput((640, 400)).link(stereo.right)
+    q_depth = stereo.depth.createOutputQueue(maxSize=2, blocking=False)
 
-    xout_rgb = pipeline.create(dai.node.XLinkOut)
-    xout_rgb.setStreamName("rgb")
-    cam.preview.link(xout_rgb.input)
-
-    xout_depth = pipeline.create(dai.node.XLinkOut)
-    xout_depth.setStreamName("depth")
-    stereo.depth.link(xout_depth.input)
-
-    with dai.Device(pipeline) as device:
-        print("OAK-D Lite connected:", device.getDeviceName())
-        q_rgb = device.getOutputQueue("rgb", maxSize=2, blocking=False)
-        q_depth = device.getOutputQueue("depth", maxSize=2, blocking=False)
-        depth_mm: float | None = None
-        while True:
-            d = q_depth.tryGet()
-            if d is not None:
-                depth_mm = central_median_depth(d.getFrame())
-            frame = q_rgb.tryGet()
-            if frame is not None and clients:
-                await broadcast(encode_frame(frame.getCvFrame(), depth_mm))
-            await asyncio.sleep(1 / (FPS * 4))
+    pipeline.start()
+    print("OAK-D Lite pipeline started")
+    depth_mm: float | None = None
+    while pipeline.isRunning():
+        d = q_depth.tryGet()
+        if d is not None:
+            depth_mm = central_median_depth(d.getFrame())
+        frame = q_rgb.tryGet()
+        if frame is not None and clients:
+            await broadcast(encode_frame(frame.getCvFrame(), depth_mm))
+        await asyncio.sleep(1 / (FPS * 4))
 
 
 async def mock_loop() -> None:
