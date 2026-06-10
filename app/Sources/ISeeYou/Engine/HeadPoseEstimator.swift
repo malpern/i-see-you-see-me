@@ -10,6 +10,8 @@ struct AttentionEstimate {
     let pitchDegrees: Double
     /// True when the head orientation is within the "looking at target" cone.
     let isLooking: Bool
+    /// Face center in the frame, normalized 0-1 (Vision coordinates: y up).
+    var faceCenter: CGPoint? = nil
 }
 
 /// A swappable attention estimator — the heart of the modular architecture.
@@ -48,7 +50,13 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
         let yaw = (face.yaw?.doubleValue ?? 0) * 180 / .pi
         let pitch = (face.pitch?.doubleValue ?? 0) * 180 / .pi
         let looking = abs(yaw) <= yawThresholdDegrees && abs(pitch) <= pitchThresholdDegrees
-        return AttentionEstimate(facePresent: true, yawDegrees: yaw, pitchDegrees: pitch, isLooking: looking)
+        return AttentionEstimate(
+            facePresent: true,
+            yawDegrees: yaw,
+            pitchDegrees: pitch,
+            isLooking: looking,
+            faceCenter: CGPoint(x: face.boundingBox.midX, y: face.boundingBox.midY)
+        )
     }
 }
 

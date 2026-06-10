@@ -21,6 +21,8 @@ final class AppState: ObservableObject {
     @Published private(set) var lastYaw: Double = 0
     @Published private(set) var lastPitch: Double = 0
     @Published private(set) var lastDistanceMM: Int?
+    /// Where the face is in the frame (normalized, Vision coords: y up).
+    @Published private(set) var faceCenter: CGPoint?
 
     private var source: SensorSource?
     private let estimator: AttentionEstimator = VisionHeadPoseEstimator()
@@ -68,6 +70,7 @@ final class AppState: ObservableObject {
             if estimate.facePresent {
                 self.lastYaw = estimate.yawDegrees
                 self.lastPitch = estimate.pitchDegrees
+                self.faceCenter = estimate.faceCenter
             }
             if let depth = frame.depthMM { self.lastDistanceMM = Int(depth) }
         }

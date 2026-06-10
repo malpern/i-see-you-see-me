@@ -21,6 +21,16 @@ struct EyesView: View {
 
     private var isWatched: Bool { state.engineState == .looking }
 
+    /// Pupil offset that points at the person's actual position in the frame.
+    /// Vision coords are y-up; the camera image is unmirrored, so x flips to
+    /// behave like a mirror (move left → eyes move to follow you).
+    private var personTarget: CGSize {
+        guard let c = state.faceCenter else { return .zero }
+        let x = max(-0.8, min(0.8, (0.5 - c.x) * 1.6))
+        let y = max(-0.45, min(0.45, (0.5 - c.y) * 1.0))
+        return CGSize(width: x, height: y)
+    }
+
     /// 1 = wide open, 0 = fully closed. Droopy half-lids when nobody's around.
     private var openness: Double {
         if blink { return 0.0 }
@@ -49,7 +59,9 @@ struct EyesView: View {
                         width: (sin(t * 1.9) * 0.6 + sin(t * 3.7 + 1.3) * 0.4) * driftAmp,
                         height: (cos(t * 2.3 + 0.7) * 0.6 + sin(t * 4.1) * 0.4) * driftAmp
                     )
-                    let base = isWatched ? .zero : fixation
+                    // Watched: aim at the person, not an abstract center —
+                    // and keep aiming as they move.
+                    let base = isWatched ? personTarget : fixation
                     let offset = CGSize(width: base.width + drift.width, height: base.height + drift.height)
 
                     HStack(spacing: 36) {
@@ -84,7 +96,11 @@ struct EyesView: View {
         guard !isWatched, now >= nextSaccadeAt else { return }
 
         let newFixation: CGSize
-        if Double.random(in: 0..<1) < 0.35 {
+        let roll = Double.random(in: 0..<1)
+        if state.engineState == .present, roll < 0.3 {
+            // Someone's there but not looking: sneak a glance at them.
+            newFixation = personTarget
+        } else if roll < 0.55 {
             // Small re-fixation near the current spot.
             newFixation = CGSize(
                 width: max(-0.95, min(0.95, fixation.width + Double.random(in: -0.22...0.22))),
@@ -100,9 +116,15 @@ struct EyesView: View {
             )
         }
 
+        // Humans often blink during large gaze shifts.
+        let jump = hypot(newFixation.width - fixation.width, newFixation.height - fixation.height)
+
         // Saccades are ballistic: fast out, no bounce.
         withAnimation(.easeOut(duration: Double.random(in: 0.12...0.18))) {
             fixation = newFixation
+        }
+        if jump > 0.7, !blink, Double.random(in: 0..<1) < 0.35 {
+            runBlink()
         }
         nextSaccadeAt = now.addingTimeInterval(Double.random(in: 0.5...3.0))
     }
