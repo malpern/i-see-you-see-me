@@ -17,14 +17,15 @@ struct EyesView: View {
     @State private var fixation = CGSize(width: -0.6, height: 0.05)
     @State private var nextSaccadeAt = Date()
     @State private var blink = false
+    @State private var nextBlinkAt = Date().addingTimeInterval(1.5)
 
     private let tick = Timer.publish(every: 0.18, on: .main, in: .common).autoconnect()
 
     private var isWatched: Bool { state.engineState == .looking }
 
-    /// 1 = wide open. Droopy half-lids when nobody's around.
+    /// 1 = wide open, 0 = fully closed. Droopy half-lids when nobody's around.
     private var openness: Double {
-        if blink { return 0.06 }
+        if blink { return 0.0 }
         switch state.engineState {
         case .empty: return 0.55
         case .present: return 0.92
@@ -70,7 +71,7 @@ struct EyesView: View {
         .onAppear { state.start() }
         .onReceive(tick) { now in
             saccadeIfDue(now)
-            maybeBlink()
+            blinkIfDue(now)
         }
     }
 
@@ -101,19 +102,25 @@ struct EyesView: View {
         nextSaccadeAt = now.addingTimeInterval(Double.random(in: 0.5...3.0))
     }
 
-    private func maybeBlink() {
-        guard !blink, Double.random(in: 0..<1) < 0.045 else { return }
+    /// Blinks happen in every state — watching included — at irregular
+    /// intervals, with variable closed time and the occasional double blink.
+    private func blinkIfDue(_ now: Date) {
+        guard !blink, now >= nextBlinkAt else { return }
         runBlink()
-        // Occasionally a quick double blink.
-        if Double.random(in: 0..<1) < 0.25 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { runBlink() }
+        if Double.random(in: 0..<1) < 0.22 {
+            // Double blink, then a slightly longer rest.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) { runBlink() }
+            nextBlinkAt = now.addingTimeInterval(Double.random(in: 2.5...6.5))
+        } else {
+            nextBlinkAt = now.addingTimeInterval(Double.random(in: 1.2...5.5))
         }
     }
 
     private func runBlink() {
+        let closedFor = Double.random(in: 0.07...0.16)
         withAnimation(.easeIn(duration: 0.06)) { blink = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.easeOut(duration: 0.14)) { blink = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06 + closedFor) {
+            withAnimation(.easeOut(duration: 0.13)) { blink = false }
         }
     }
 
@@ -178,11 +185,13 @@ struct Eye: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.75), value: dilated)
 
                 // Eyelid drops from the top; same color as the backdrop.
+                // openness 0 puts the lid's bottom edge exactly at the eye's
+                // bottom — a real full blink, not a squint.
                 Ellipse()
                     .fill(Color(red: 0.07, green: 0.08, blue: 0.10))
                     .frame(width: w * 1.3, height: h * 1.3)
-                    .offset(y: -h * (0.35 + openness))
-                    .animation(.easeInOut(duration: 0.12), value: openness)
+                    .offset(y: -h * (0.15 + openness * 1.2))
+                    .animation(.easeInOut(duration: 0.1), value: openness)
             }
             .clipShape(Ellipse())
             .overlay(Ellipse().stroke(Color(white: 0.25), lineWidth: 2))
