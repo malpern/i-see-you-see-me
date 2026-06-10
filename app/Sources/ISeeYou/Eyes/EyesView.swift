@@ -235,6 +235,39 @@ struct EyesView: View {
     }
 }
 
+/// The upper eyelid: covers the eye from the top down to a curved edge.
+struct LidShape: Shape {
+    var edge: CGFloat   // y of the lid edge at the corners
+    var bulge: CGFloat  // extra downward curve at the center
+    var edgeOnly: Bool = false
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(edge, bulge) }
+        set { edge = newValue.first; bulge = newValue.second }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        if edgeOnly {
+            p.move(to: CGPoint(x: 0, y: edge))
+            p.addQuadCurve(
+                to: CGPoint(x: rect.width, y: edge),
+                control: CGPoint(x: rect.midX, y: edge + bulge * 2)
+            )
+        } else {
+            p.move(to: CGPoint(x: 0, y: -rect.height))
+            p.addLine(to: CGPoint(x: 0, y: edge))
+            p.addQuadCurve(
+                to: CGPoint(x: rect.width, y: edge),
+                control: CGPoint(x: rect.midX, y: edge + bulge * 2)
+            )
+            p.addLine(to: CGPoint(x: rect.width, y: -rect.height))
+            p.closeSubpath()
+        }
+        return p
+    }
+}
+
 /// One eye, drawn in pure SwiftUI: brow, sclera, iris, pupil, glints, eyelid.
 struct Eye: View {
     var pupilOffset: CGSize   // normalized -1...1
@@ -257,10 +290,46 @@ struct Eye: View {
 
             ZStack {
                 eyeball(w: w, h: h, irisD: irisD, pupilD: pupilD, maxOffX: maxOffX, maxOffY: maxOffY)
+                lidDressing(w: w, h: h)
                 brow(w: w, h: h)
             }
         }
         .aspectRatio(1.15, contentMode: .fit)
+    }
+
+    /// Lid edge y at the eye corners for the current openness. Open leaves a
+    /// hint of lid visible at the top; closed reaches the bottom of the eye.
+    private func lidEdge(h: CGFloat) -> CGFloat {
+        h * (0.08 + (1.0 - openness) * 0.96)
+    }
+
+    /// Lash y along the lid's quadratic edge at parameter t (0 = left corner).
+    private func lashY(t: CGFloat, h: CGFloat) -> CGFloat {
+        lidEdge(h: h) + 2 * t * (1 - t) * (h * 0.10) * 2
+    }
+
+    /// The visible lid line plus lashes, riding the lid edge — drawn outside
+    /// the eyeball clip so lashes can flare past the eye outline.
+    private func lidDressing(w: CGFloat, h: CGFloat) -> some View {
+        let lashColor = Color(red: 0.16, green: 0.14, blue: 0.13)
+        // Lashes flare from the outer half of the lid.
+        let ts: [CGFloat] = mirrored ? [0.72, 0.84, 0.94] : [0.28, 0.16, 0.06]
+        let angles: [Double] = (mirrored ? [22.0, 34, 48] : [-22.0, -34, -48])
+
+        return ZStack {
+            LidShape(edge: lidEdge(h: h), bulge: h * 0.10, edgeOnly: true)
+                .stroke(Color(white: 0.30), style: StrokeStyle(lineWidth: h * 0.03, lineCap: .round))
+
+            ForEach(0..<3, id: \.self) { i in
+                Capsule()
+                    .fill(lashColor)
+                    .frame(width: h * 0.022, height: h * 0.13)
+                    .rotationEffect(.degrees(angles[i]), anchor: .bottom)
+                    .position(x: ts[i] * w, y: lashY(t: ts[i], h: h) - h * 0.065)
+            }
+        }
+        .frame(width: w, height: h)
+        .animation(.easeInOut(duration: 0.1), value: openness)
     }
 
     /// A curved arc that follows the eye's own top curvature — drawn as a
@@ -353,13 +422,10 @@ struct Eye: View {
                         )
                     )
 
-                // Eyelid drops from the top; same color as the backdrop.
-                // openness 0 puts the lid's bottom edge exactly at the eye's
-                // bottom — a real full blink, not a squint.
-                Ellipse()
+                // Eyelid: covers from the top down to a curved lid line that
+                // follows the eye's curvature; same color as the backdrop.
+                LidShape(edge: lidEdge(h: h), bulge: h * 0.10)
                     .fill(Color(red: 0.07, green: 0.08, blue: 0.10))
-                    .frame(width: w * 1.3, height: h * 1.3)
-                    .offset(y: -h * (0.15 + openness * 1.2))
                     .animation(.easeInOut(duration: 0.1), value: openness)
             }
             .clipShape(Ellipse())
