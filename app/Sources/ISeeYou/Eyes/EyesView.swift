@@ -134,12 +134,15 @@ struct EyesView: View {
     private func saccadeIfDue(_ now: Date) {
         guard !isWatched, now >= nextSaccadeAt else { return }
 
-        let newFixation: CGSize
+        var newFixation: CGSize
+        var holdRange: ClosedRange<Double> = 0.5...3.0
         let roll = Double.random(in: 0..<1)
-        if state.engineState == .present, roll < 0.3 {
-            // Someone's there but not looking: sneak a glance at them.
+        if state.engineState == .present, roll < 0.12 {
+            // Someone's there but not looking: a rare, *stolen* glance —
+            // brief, then darting away again.
             newFixation = personTarget
-        } else if roll < 0.55 {
+            holdRange = 0.3...0.7
+        } else if roll < 0.45 {
             // Small re-fixation near the current spot.
             newFixation = CGSize(
                 width: max(-0.95, min(0.95, fixation.width + Double.random(in: -0.22...0.22))),
@@ -150,9 +153,20 @@ struct EyesView: View {
             // occasionally sweeping across to the other side.
             let side: Double = Double.random(in: 0..<1) < 0.6 ? (fixation.width < 0 ? 1 : -1) : (fixation.width < 0 ? -1 : 1)
             newFixation = CGSize(
-                width: side * Double.random(in: 0.25...0.9),
+                width: side * Double.random(in: 0.35...0.9),
                 height: Double.random(in: -0.35...0.4)
             )
+        }
+
+        // While ignoring someone, idle gaze should stay *away* from them —
+        // accidental near-misses read as staring.
+        if state.engineState == .present, newFixation != personTarget {
+            let toPerson = hypot(newFixation.width - personTarget.width, newFixation.height - personTarget.height)
+            if toPerson < 0.45 {
+                newFixation.width = personTarget.width >= 0
+                    ? -Double.random(in: 0.4...0.9)
+                    : Double.random(in: 0.4...0.9)
+            }
         }
 
         // Humans often blink during large gaze shifts.
@@ -165,7 +179,7 @@ struct EyesView: View {
         if jump > 0.7, !blink, Double.random(in: 0..<1) < 0.35 {
             runBlink()
         }
-        nextSaccadeAt = now.addingTimeInterval(Double.random(in: 0.5...3.0))
+        nextSaccadeAt = now.addingTimeInterval(Double.random(in: holdRange))
     }
 
     /// Blinks happen in every state — watching included — at irregular
