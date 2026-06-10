@@ -48,6 +48,17 @@ struct EyesView: View {
         }
     }
 
+    /// Brow height 0...1: drowsy-low alone, lifted with interest, shot up
+    /// when startled.
+    private func browRaise(startled: Bool) -> Double {
+        if startled { return 1.0 }
+        switch state.engineState {
+        case .empty: return 0.05
+        case .present: return 0.3
+        case .looking: return 0.6
+        }
+    }
+
     /// Pupil dilation 0...1: attention dilates, and proximity (OAK depth)
     /// dilates further — walk up to it and the pupils visibly bloom.
     private func dilation(startled: Bool) -> Double {
@@ -85,11 +96,18 @@ struct EyesView: View {
                     let startled = context.date < startledUntil
                     let open = opennessAt(context.date)
                     let dilate = dilation(startled: startled)
+                    let brow = browRaise(startled: startled)
 
                     HStack(spacing: 36) {
-                        Eye(pupilOffset: offset, openness: open, dilation: dilate)
-                        Eye(pupilOffset: offset, openness: open, dilation: dilate)
+                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: false)
+                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: true)
                     }
+                    .background(
+                        RadialGradient(
+                            colors: [Color.white.opacity(0.07), .clear],
+                            center: .center, startRadius: 20, endRadius: 300
+                        )
+                    )
                     .scaleEffect(startled ? 1.06 : 1.0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.55), value: startled)
                 }
@@ -212,11 +230,13 @@ struct EyesView: View {
     }
 }
 
-/// One eye, drawn in pure SwiftUI: sclera, iris, pupil, glint, eyelid.
+/// One eye, drawn in pure SwiftUI: brow, sclera, iris, pupil, glints, eyelid.
 struct Eye: View {
     var pupilOffset: CGSize   // normalized -1...1
     var openness: Double      // 0 closed ... 1 wide open
     var dilation: Double      // 0 constricted ... 1 fully dilated
+    var browRaise: Double     // 0 low/relaxed ... 1 shot up
+    var mirrored: Bool        // right eye mirrors the brow tilt
 
     var body: some View {
         GeometryReader { geo in
@@ -227,6 +247,29 @@ struct Eye: View {
             let maxOffX = (w - irisD) / 2 * 0.8
             let maxOffY = (h - irisD) / 2 * 0.8
 
+            ZStack {
+                eyeball(w: w, h: h, irisD: irisD, pupilD: pupilD, maxOffX: maxOffX, maxOffY: maxOffY)
+                brow(w: w, h: h)
+            }
+        }
+        .aspectRatio(1.15, contentMode: .fit)
+    }
+
+    /// Relaxed brows sit low and tilt gently down toward the temple;
+    /// raised brows lift and arch.
+    private func brow(w: CGFloat, h: CGFloat) -> some View {
+        Capsule()
+            .fill(Color(red: 0.45, green: 0.38, blue: 0.33))
+            .frame(width: w * 0.74, height: h * 0.075)
+            .rotationEffect(.degrees((mirrored ? -1 : 1) * (5 - browRaise * 12)))
+            .offset(y: -h * (0.48 + browRaise * 0.17) + pupilOffset.height * h * 0.03)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: browRaise)
+    }
+
+    private func eyeball(
+        w: CGFloat, h: CGFloat, irisD: CGFloat, pupilD: CGFloat,
+        maxOffX: CGFloat, maxOffY: CGFloat
+    ) -> some View {
             ZStack {
                 // Sclera
                 Ellipse()
@@ -256,16 +299,33 @@ struct Eye: View {
                         .fill(.black)
                         .frame(width: pupilD, height: pupilD)
 
+                    // Primary glint + a faint secondary, like a second light
+                    // source — flat single glints are what make cartoon eyes
+                    // look plastic.
                     Circle()
                         .fill(.white.opacity(0.9))
                         .frame(width: pupilD * 0.28, height: pupilD * 0.28)
                         .offset(x: -pupilD * 0.22, y: -pupilD * 0.22)
+                    Circle()
+                        .fill(.white.opacity(0.35))
+                        .frame(width: pupilD * 0.14, height: pupilD * 0.14)
+                        .offset(x: pupilD * 0.26, y: pupilD * 0.24)
                 }
                 .offset(
                     x: pupilOffset.width * maxOffX,
                     y: pupilOffset.height * maxOffY
                 )
                 .animation(.spring(response: 0.45, dampingFraction: 0.8), value: dilation)
+
+                // Upper-lid ambient occlusion: the soft shadow the lid casts
+                // on the eyeball. This is most of what makes it read as 3D.
+                Ellipse()
+                    .fill(
+                        LinearGradient(
+                            colors: [.black.opacity(0.28), .clear],
+                            startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)
+                        )
+                    )
 
                 // Eyelid drops from the top; same color as the backdrop.
                 // openness 0 puts the lid's bottom edge exactly at the eye's
@@ -279,7 +339,5 @@ struct Eye: View {
             .clipShape(Ellipse())
             .overlay(Ellipse().stroke(Color(white: 0.25), lineWidth: 2))
             .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
-        }
-        .aspectRatio(1.15, contentMode: .fit)
     }
 }
