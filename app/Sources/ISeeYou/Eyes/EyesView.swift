@@ -39,8 +39,10 @@ struct EyesView: View {
     }
 
     /// 1 = wide open, 0 = fully closed. Alone, the lids droop further the
-    /// longer nobody's around (sleepiness ramp over ~90 s).
-    private func opennessAt(_ now: Date) -> Double {
+    /// longer nobody's around (sleepiness ramp over ~90 s). With someone in
+    /// frame, each lid mirrors the person's corresponding eye continuously —
+    /// squints squint, wide eyes widen, winks wink.
+    private func opennessAt(_ now: Date, personOpen: Double) -> Double {
         if blink { return 0.0 }
         // Mirror sustained closure: your eyes shut, its eyes shut, until
         // yours open again.
@@ -49,20 +51,25 @@ struct EyesView: View {
         case .empty:
             let elapsed = now.timeIntervalSince(emptySince ?? now)
             return max(0.3, 0.62 - elapsed / 90.0 * 0.32)
-        case .present: return 0.92
-        case .looking: return 1.0
+        case .present, .looking:
+            let base = state.engineState == .looking ? 1.0 : 0.92
+            return max(0.0, min(1.2, base * personOpen))
         }
     }
 
     /// Brow height 0...1: drowsy-low alone, lifted with interest, shot up
-    /// when startled.
+    /// when startled — and mirroring wide eyes raises them further.
     private func browRaise(startled: Bool) -> Double {
         if startled { return 1.0 }
+        let stateRaise: Double
         switch state.engineState {
-        case .empty: return 0.05
-        case .present: return 0.3
-        case .looking: return 0.6
+        case .empty: stateRaise = 0.05
+        case .present: stateRaise = 0.3
+        case .looking: stateRaise = 0.6
         }
+        let avgOpen = (state.personLeftOpen + state.personRightOpen) / 2
+        let wideRaise = min(1.0, max(0.0, (avgOpen - 1.05) * 2.5))
+        return state.engineState == .empty ? stateRaise : max(stateRaise, wideRaise)
     }
 
     /// Pupil dilation 0...1: attention dilates, and proximity (OAK depth)
@@ -100,13 +107,15 @@ struct EyesView: View {
                     let base = isWatched ? personTarget : fixation
                     let offset = CGSize(width: base.width + drift.width, height: base.height + drift.height)
                     let startled = context.date < startledUntil
-                    let open = opennessAt(context.date)
+                    // Mirror layout: your left eye drives the screen-left eye.
+                    let openL = opennessAt(context.date, personOpen: state.personLeftOpen)
+                    let openR = opennessAt(context.date, personOpen: state.personRightOpen)
                     let dilate = smoothDilation
                     let brow = browRaise(startled: startled)
 
                     HStack(spacing: 36) {
-                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: false)
-                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: true)
+                        Eye(pupilOffset: offset, openness: openL, dilation: dilate, browRaise: brow, mirrored: false)
+                        Eye(pupilOffset: offset, openness: openR, dilation: dilate, browRaise: brow, mirrored: true)
                     }
                     .background(
                         RadialGradient(

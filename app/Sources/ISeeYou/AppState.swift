@@ -30,6 +30,10 @@ final class AppState: ObservableObject {
     /// True while the person's eyes have stayed closed (~0.2s+), so the
     /// app's eyes can mirror sustained closure, not just blinks.
     @Published private(set) var personEyesClosed = false
+    /// Continuous per-eye openness (subject's anatomical left/right),
+    /// lightly smoothed: 0 closed, ~1 normal, >1 wide.
+    @Published private(set) var personLeftOpen: Double = 1.0
+    @Published private(set) var personRightOpen: Double = 1.0
     private var eyesWereClosed = false
     private var closedFrameStreak = 0
 
@@ -106,6 +110,12 @@ final class AppState: ObservableObject {
                 self.closedFrameStreak = estimate.eyesClosed ? self.closedFrameStreak + 1 : 0
                 // ~3 frames at 15 fps: long enough to not be a blink.
                 self.personEyesClosed = self.closedFrameStreak >= 3
+                if let l = estimate.leftEyeOpenness {
+                    self.personLeftOpen += (l - self.personLeftOpen) * 0.5
+                }
+                if let r = estimate.rightEyeOpenness {
+                    self.personRightOpen += (r - self.personRightOpen) * 0.5
+                }
             }
             if let depth = frame.depthMM { self.lastDistanceMM = Int(depth) }
         }

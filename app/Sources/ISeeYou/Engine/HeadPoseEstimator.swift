@@ -14,6 +14,10 @@ struct AttentionEstimate {
     var faceCenter: CGPoint? = nil
     /// True while the person's eyes are closed (blink or shut).
     var eyesClosed: Bool = false
+    /// Continuous per-eye openness: 0 closed, ~1 normal, >1 wide.
+    /// Anatomical sides (subject's left/right).
+    var leftEyeOpenness: Double? = nil
+    var rightEyeOpenness: Double? = nil
 }
 
 /// A swappable attention estimator — the heart of the modular architecture.
@@ -53,22 +57,26 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
         let yaw = (face.yaw?.doubleValue ?? 0) * 180 / .pi
         let pitch = (face.pitch?.doubleValue ?? 0) * 180 / .pi
         let looking = abs(yaw) <= yawThresholdDegrees && abs(pitch) <= pitchThresholdDegrees
+        let (closed, leftOpen, rightOpen) = Self.eyeMetrics(face)
         return AttentionEstimate(
             facePresent: true,
             yawDegrees: yaw,
             pitchDegrees: pitch,
             isLooking: looking,
             faceCenter: CGPoint(x: face.boundingBox.midX, y: face.boundingBox.midY),
-            eyesClosed: Self.eyesClosed(face)
+            eyesClosed: closed,
+            leftEyeOpenness: leftOpen,
+            rightEyeOpenness: rightOpen
         )
     }
 
-    /// Eye-aspect-ratio blink detection: when the lid closes, the eye
-    /// contour's height collapses relative to its width.
-    private static func eyesClosed(_ face: VNFaceObservation) -> Bool {
+    /// Eye-aspect-ratio metrics: the eye contour's height relative to its
+    /// width. Collapsed = closed; tall = wide. Mapped so ~0.32 aspect (a
+    /// relaxed open eye) reads as 1.0, squints fall below, wide eyes above.
+    private static func eyeMetrics(_ face: VNFaceObservation) -> (closed: Bool, left: Double?, right: Double?) {
         guard let landmarks = face.landmarks,
               let left = landmarks.leftEye, let right = landmarks.rightEye
-        else { return false }
+        else { return (false, nil, nil) }
 
         func aspect(_ region: VNFaceLandmarkRegion2D) -> CGFloat {
             let pts = region.normalizedPoints
@@ -80,7 +88,13 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
             return (maxY - minY) / (maxX - minX)
         }
 
-        return (aspect(left) + aspect(right)) / 2 < 0.18
+        func openness(_ a: CGFloat) -> Double {
+            max(0.0, min(1.4, (Double(a) - 0.10) / 0.22))
+        }
+
+        let la = aspect(left)
+        let ra = aspect(right)
+        return ((la + ra) / 2 < 0.18, openness(la), openness(ra))
     }
 }
 
