@@ -133,7 +133,15 @@ async def serve(mock: bool) -> None:
         if mock:
             await mock_loop()
         else:
-            await oak_loop()
+            # USB hiccups close the device queues mid-stream; the service
+            # must outlive the camera and re-attach when it comes back.
+            while True:
+                try:
+                    await oak_loop()
+                    print("OAK pipeline ended; restarting in 2s")
+                except Exception as exc:
+                    print(f"OAK pipeline error: {exc}; restarting in 2s")
+                await asyncio.sleep(2)
 
 
 def cli() -> None:
