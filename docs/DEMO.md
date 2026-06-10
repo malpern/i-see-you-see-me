@@ -3,46 +3,79 @@
 ## Setup (before judges arrive)
 
 ```bash
-# Terminal 1 — OAK-D sensor service (or --mock if hardware misbehaves)
-cd sensor && uv run oak-sensor
+# Terminal 1 — OAK-D sensor service (auto-reattaches if the camera drops)
+cd sensor && uv run --no-sync oak-sensor
 
-# Menu bar app
+# The app: eyes window opens at launch, menu bar eye icon for the internals
 cd app && open ISeeYou.app
 ```
 
-Sanity check: menu bar eye icon visible, narration card populating, sensor picker on the source you want. If the OAK-D acts up, flip the picker to Built-in Camera — the demo continues.
+The app defaults to the OAK-D and falls back to the built-in camera by itself
+if the OAK path goes quiet for 5 s — the demo cannot open on a dead sensor.
 
-## Beat 1 — The event stream (60s)
+Sanity check: eyes wandering in the window, menu bar status shows your sensor,
+events flowing. Have `MultimodalAttentionEstimator.swift` open in Xcode 27.
 
-Open the menu bar app. Walk into frame: **person entered**. Look at the screen: **look started**. Look away quickly: **glance (0.8s)**. Stare for a few seconds: **attention held**.
+## Beat 1 — The eyes (60s, no narration needed at first)
 
-> "This is a presence engine, not a face detector. Consumers never see frames, landmarks, or depth maps — only semantic events with hysteresis and dwell timing. The OAK-D Lite is treated as a smart sensor: it ships observations; all interpretation is host-side and swappable."
+Stand back, ignore it: the eyes wander with saccades and drift, sneaking the
+occasional glance at you. Then look at it:
 
-Point at the depth readout (OAK source): distance updates live; step back: **receding**.
+- Eyes **lock onto you** and follow as you move side to side
+- **Blink** — it blinks back
+- **Wink left, wink right** — it winks the matching eye
+- **Go wide-eyed** — it goes wide, brows up
+- **Close your eyes** — it closes its eyes until you open (the audience sees
+  what you can't)
+- Walk closer (OAK): **pupils dilate with proximity**
+- Walk away and wait: drowsy lids, slow blinks, asleep
 
-## Beat 2 — Apple on-device AI, today's APIs (60s)
+> "Everything you just saw is consuming five semantic events and a depth
+> number. The eyes never see a camera frame."
 
-Click **Narrate**.
+## Beat 2 — What's underneath (60s)
 
-> "The narration is Apple's on-device foundation model — the FoundationModels framework, running locally on this Mac. Zero cloud, zero tokens. And note what it consumes: the event log only, never a single frame. The privacy boundary is architectural, not a policy promise."
+Open the menu bar panel: live state, head yaw/pitch, distance, event feed
+(person_entered, glance, attention_held…), and the narration card.
 
-The attention math itself is Apple's Vision framework — head yaw/pitch on the Neural Engine.
+> "The OAK-D Lite is treated as a smart sensor — it ships observations over a
+> WebSocket; all interpretation is host-side and swappable. Presence engine →
+> semantic events → any consumer. The eyes are one consumer; this panel is
+> another."
+
+Click **Narrate**:
+
+> "That summary is Apple's on-device foundation model — zero cloud, zero
+> tokens — and it consumes only the event log, never frames. The privacy
+> boundary is architectural."
+
+Bonus depth flex: the iris itself is a procedural Metal shader; the pupil
+diameter is a live parameter driven by the depth camera.
 
 ## Beat 3 — Monday's APIs (45s)
 
-Open `MultimodalAttentionEstimator.swift` in Xcode 27.
+Show `MultimodalAttentionEstimator.swift` in Xcode 27:
 
-> "At WWDC on Monday, Apple made Foundation Models multimodal — image attachments in prompts, macOS 27 only. Here's our attention estimator built on it: presence and attention classification as a structured-output prompt. It compiles under the Xcode 27 SDK today, sits behind the same `AttentionEstimator` protocol as the Vision estimator, and drops in on Golden Gate without touching the engine, the events, or the UI. The architecture we demoed is the upgrade path."
+> "At WWDC on Monday, Foundation Models went multimodal — image attachments
+> in prompts, macOS 27 only. Here's our attention estimator built on it,
+> using the shipping `Attachment` API — it compiles against the macOS 27 SDK
+> released this week, sits behind the same `AttentionEstimator` protocol as
+> the Vision-framework estimator we just demoed, and activates on Golden Gate
+> without touching the engine, the events, or the eyes. The architecture is
+> the upgrade path."
 
 ## Beat 4 — Why it matters (15s)
 
-> "Attention-aware notifications, e-ink status boards that wake when you look at them, kiosks that know they're being watched. One reusable engine, semantic events out, everything on-device."
+> "Attention-aware notifications, e-ink boards that wake when you look at
+> them, kiosks that know they're being watched. One reusable presence engine,
+> semantic events out, everything on-device."
 
 ## Fallback matrix
 
 | Failure | Move |
 |---|---|
-| OAK-D won't enumerate | Sensor picker → Built-in Camera |
-| No hardware at all | `uv run oak-sensor --mock` (synthetic frames prove the protocol) |
-| Foundation Models unavailable (Apple Intelligence off) | Event feed still demos; narrate the narration |
-| Xcode 27 not ready | Show the gated file in any editor; the `#if MACOS27_SDK` flag tells the story |
+| OAK-D won't enumerate | Nothing to do — app auto-falls back to built-in camera; demo loses only the depth beats |
+| Sensor service dies | It auto-restarts the pipeline; worst case relaunch terminal 1 |
+| Wink/wide detection flaky in venue lighting | Lead with blink + closure mirroring (most robust), skip winks |
+| Foundation Models unavailable (Apple Intelligence off) | Event feed still demos; describe the narration |
+| Everything on fire | Eyes window + built-in camera alone carry Beat 1, which is the demo |
