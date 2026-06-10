@@ -19,8 +19,6 @@ struct EyesView: View {
     @State private var blink = false
     @State private var nextBlinkAt = Date().addingTimeInterval(1.5)
 
-    private let tick = Timer.publish(every: 0.18, on: .main, in: .common).autoconnect()
-
     private var isWatched: Bool { state.engineState == .looking }
 
     /// 1 = wide open, 0 = fully closed. Droopy half-lids when nobody's around.
@@ -69,9 +67,16 @@ struct EyesView: View {
             .padding(28)
         }
         .onAppear { state.start() }
-        .onReceive(tick) { now in
-            saccadeIfDue(now)
-            blinkIfDue(now)
+        // A Combine timer property gets recreated every time AppState
+        // publishes (~10 Hz with a face in frame) and never fires. .task is
+        // keyed to view identity and survives re-renders.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(120))
+                let now = Date()
+                saccadeIfDue(now)
+                blinkIfDue(now)
+            }
         }
     }
 
