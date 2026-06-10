@@ -10,7 +10,9 @@ final class AppState: ObservableObject {
         var id: String { rawValue }
     }
 
-    @Published var sourceKind: SourceKind = .builtIn {
+    /// OAK-D by default; a watchdog falls back to the built-in camera if no
+    /// frames arrive, so the demo never opens on a dead sensor.
+    @Published var sourceKind: SourceKind = .oak {
         didSet { if oldValue != sourceKind { restartSensor() } }
     }
     @Published private(set) var engineState: AttentionEngine.State = .empty
@@ -35,11 +37,19 @@ final class AppState: ObservableObject {
     private var narrationTask: Task<Void, Never>?
     private var eventsSinceNarration = 0
     private var started = false
+    private var lastFrameAt = Date()
+    private var watchdogTask: Task<Void, Never>?
 
     func start() {
         // Both the eyes window and the menu call this on appear.
         guard !started else { return }
         started = true
+        watchdogTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                self?.fallBackIfStarved()
+            }
+        }
         engine.onEvent = { [weak self] event in
             DispatchQueue.main.async { self?.append(event) }
         }
@@ -50,7 +60,17 @@ final class AppState: ObservableObject {
         restartSensor()
     }
 
+    /// If the OAK path goes quiet (service down, camera unplugged), switch
+    /// to the built-in camera rather than sitting dark. Re-picking OAK-D in
+    /// the menu retries it.
+    private func fallBackIfStarved() {
+        guard sourceKind == .oak, Date().timeIntervalSince(lastFrameAt) > 5 else { return }
+        sourceKind = .builtIn
+        sensorStatus = "OAK-D unavailable — fell back to built-in camera"
+    }
+
     private func restartSensor() {
+        lastFrameAt = Date()
         source?.stop()
         let newSource: SensorSource = sourceKind == .oak ? OAKSource() : LocalCameraSource()
         source = newSource
@@ -69,6 +89,7 @@ final class AppState: ObservableObject {
         engine.update(estimate, depthMM: frame.depthMM)
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            self.lastFrameAt = Date()
             self.engineState = self.engine.state
             if estimate.facePresent {
                 self.lastYaw = estimate.yawDegrees
