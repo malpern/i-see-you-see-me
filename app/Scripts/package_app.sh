@@ -155,6 +155,23 @@ if [[ -f "$ICON_TARGET" ]]; then
   cp "$ICON_TARGET" "$APP/Contents/Resources/Icon.icns"
 fi
 
+# Compile SwiftUI Metal shaders into the app's default shader library.
+# Skipped (with a vector-art fallback in the app) if the Metal Toolchain
+# component isn't installed: xcodebuild -downloadComponent MetalToolchain
+if compgen -G "$ROOT/Shaders/"'*.metal' >/dev/null; then
+  if xcrun -sdk macosx metal --version >/dev/null 2>&1; then
+    METAL_TMP=$(mktemp -d)
+    for src in "$ROOT/Shaders/"*.metal; do
+      xcrun -sdk macosx metal -c "$src" -o "$METAL_TMP/$(basename "${src%.metal}").air"
+    done
+    xcrun -sdk macosx metallib "$METAL_TMP"/*.air -o "$APP/Contents/Resources/default.metallib"
+    rm -rf "$METAL_TMP"
+    echo "Compiled Metal shaders into default.metallib"
+  else
+    echo "WARNING: Metal Toolchain unavailable; skipping shader compile (app uses vector fallback)"
+  fi
+fi
+
 # Ensure contents are writable before stripping attributes and signing.
 chmod -R u+w "$APP"
 

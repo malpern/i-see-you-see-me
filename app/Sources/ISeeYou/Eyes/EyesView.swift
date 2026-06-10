@@ -20,6 +20,9 @@ struct EyesView: View {
     @State private var nextBlinkAt = Date().addingTimeInterval(1.5)
     /// Startle reflex window after someone appears.
     @State private var startledUntil = Date.distantPast
+    /// Low-pass-filtered dilation: shader parameters don't get SwiftUI
+    /// animation, so the pupil breathes via this smoothed value instead.
+    @State private var smoothDilation = 0.3
     /// When the room emptied — drives the sleepiness ramp.
     @State private var emptySince: Date?
 
@@ -95,7 +98,7 @@ struct EyesView: View {
                     let offset = CGSize(width: base.width + drift.width, height: base.height + drift.height)
                     let startled = context.date < startledUntil
                     let open = opennessAt(context.date)
-                    let dilate = dilation(startled: startled)
+                    let dilate = smoothDilation
                     let brow = browRaise(startled: startled)
 
                     HStack(spacing: 36) {
@@ -145,6 +148,8 @@ struct EyesView: View {
                 let now = Date()
                 saccadeIfDue(now)
                 blinkIfDue(now)
+                let target = dilation(startled: now < startledUntil)
+                smoothDilation += (target - smoothDilation) * 0.22
             }
         }
     }
@@ -238,12 +243,15 @@ struct Eye: View {
     var browRaise: Double     // 0 low/relaxed ... 1 shot up
     var mirrored: Bool        // right eye mirrors the brow tilt
 
+    /// True when the packaged app contains a compiled shader library.
+    static let shaderAvailable = Bundle.main.url(forResource: "default", withExtension: "metallib") != nil
+
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
-            let irisD = min(w, h) * (0.48 + 0.10 * dilation)
-            let pupilD = irisD * (0.40 + 0.28 * dilation)
+            let irisD = min(w, h) * 0.54
+            let pupilD = irisD * (0.34 + 0.24 * dilation)
             let maxOffX = (w - irisD) / 2 * 0.8
             let maxOffY = (h - irisD) / 2 * 0.8
 
@@ -285,24 +293,37 @@ struct Eye: View {
                         )
                     )
 
-                // Iris + pupil + glint, travelling together
+                // Iris + pupil (procedural Metal shader) + glints, travelling
+                // together. The shader draws fibers, collarette, limbal ring,
+                // and the pupil itself — dilation is a shader parameter.
+                // Falls back to vector art when no metallib ships in the
+                // bundle (Metal Toolchain not installed at build time).
                 ZStack {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    Color(red: 0.31, green: 0.76, blue: 0.65),
-                                    Color(red: 0.10, green: 0.42, blue: 0.38),
-                                ],
-                                center: .center, startRadius: pupilD * 0.3, endRadius: irisD * 0.62
+                    if Self.shaderAvailable {
+                        Circle()
+                            .fill(.white)
+                            .frame(width: irisD, height: irisD)
+                            .colorEffect(ShaderLibrary.default.iris(
+                                .float2(Float(irisD), Float(irisD)),
+                                .float(Float(dilation))
+                            ))
+                    } else {
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        Color(red: 0.31, green: 0.76, blue: 0.65),
+                                        Color(red: 0.10, green: 0.42, blue: 0.38),
+                                    ],
+                                    center: .center, startRadius: pupilD * 0.3, endRadius: irisD * 0.62
+                                )
                             )
-                        )
-                        .frame(width: irisD, height: irisD)
-                        .overlay(Circle().stroke(Color(red: 0.06, green: 0.25, blue: 0.22), lineWidth: 1.5))
-
-                    Circle()
-                        .fill(.black)
-                        .frame(width: pupilD, height: pupilD)
+                            .frame(width: irisD, height: irisD)
+                            .overlay(Circle().stroke(Color(red: 0.06, green: 0.25, blue: 0.22), lineWidth: 1.5))
+                        Circle()
+                            .fill(.black)
+                            .frame(width: pupilD, height: pupilD)
+                    }
 
                     // Primary glint + a faint secondary, like a second light
                     // source — flat single glints are what make cartoon eyes
