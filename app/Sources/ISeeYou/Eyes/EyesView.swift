@@ -38,22 +38,24 @@ struct EyesView: View {
         return CGSize(width: x, height: y)
     }
 
-    /// 1 = wide open, 0 = fully closed. Alone, the lids droop further the
-    /// longer nobody's around (sleepiness ramp over ~90 s). With someone in
-    /// frame, each lid mirrors the person's corresponding eye continuously —
-    /// squints squint, wide eyes widen, winks wink.
-    private func opennessAt(_ now: Date, personOpen: Double) -> Double {
+    /// 1 = wide open, 0 = fully closed. Behavior is autonomous (state-driven
+    /// openness, own blinks, sleepiness ramp) except for big actions, which
+    /// punch through: blinks, sustained closure, a deliberate wink (per
+    /// screen side, mirrored), and wide eyes.
+    private func opennessAt(_ now: Date, screenLeft: Bool) -> Double {
         if blink { return 0.0 }
         // Mirror sustained closure: your eyes shut, its eyes shut, until
         // yours open again.
         if state.personEyesClosed { return 0.0 }
+        // Mirror a wink on the matching side (your left → screen-left).
+        if screenLeft ? state.personWinkLeft : state.personWinkRight { return 0.0 }
         switch state.engineState {
         case .empty:
             let elapsed = now.timeIntervalSince(emptySince ?? now)
             return max(0.3, 0.62 - elapsed / 90.0 * 0.32)
         case .present, .looking:
-            let base = state.engineState == .looking ? 1.0 : 0.92
-            return max(0.0, min(1.2, base * personOpen))
+            if state.personWide { return 1.2 }
+            return state.engineState == .looking ? 1.0 : 0.92
         }
     }
 
@@ -67,8 +69,7 @@ struct EyesView: View {
         case .present: stateRaise = 0.3
         case .looking: stateRaise = 0.6
         }
-        let avgOpen = (state.personLeftOpen + state.personRightOpen) / 2
-        let wideRaise = min(1.0, max(0.0, (avgOpen - 1.05) * 2.5))
+        let wideRaise = state.personWide ? 0.9 : 0.0
         return state.engineState == .empty ? stateRaise : max(stateRaise, wideRaise)
     }
 
@@ -108,8 +109,8 @@ struct EyesView: View {
                     let offset = CGSize(width: base.width + drift.width, height: base.height + drift.height)
                     let startled = context.date < startledUntil
                     // Mirror layout: your left eye drives the screen-left eye.
-                    let openL = opennessAt(context.date, personOpen: state.personLeftOpen)
-                    let openR = opennessAt(context.date, personOpen: state.personRightOpen)
+                    let openL = opennessAt(context.date, screenLeft: true)
+                    let openR = opennessAt(context.date, screenLeft: false)
                     let dilate = smoothDilation
                     let brow = browRaise(startled: startled)
 

@@ -30,12 +30,17 @@ final class AppState: ObservableObject {
     /// True while the person's eyes have stayed closed (~0.2s+), so the
     /// app's eyes can mirror sustained closure, not just blinks.
     @Published private(set) var personEyesClosed = false
-    /// Continuous per-eye openness (subject's anatomical left/right),
-    /// lightly smoothed: 0 closed, ~1 normal, >1 wide.
-    @Published private(set) var personLeftOpen: Double = 1.0
-    @Published private(set) var personRightOpen: Double = 1.0
+    /// Discrete "big action" expressions — the only facial signals the eyes
+    /// mirror. Subtle squints stay un-mirrored so the face keeps feeling
+    /// autonomous rather than puppet-like.
+    @Published private(set) var personWinkLeft = false
+    @Published private(set) var personWinkRight = false
+    @Published private(set) var personWide = false
     private var eyesWereClosed = false
     private var closedFrameStreak = 0
+    private var winkLeftStreak = 0
+    private var winkRightStreak = 0
+    private var wideStreak = 0
 
     private var source: SensorSource?
     private let estimator: AttentionEstimator = VisionHeadPoseEstimator()
@@ -110,11 +115,16 @@ final class AppState: ObservableObject {
                 self.closedFrameStreak = estimate.eyesClosed ? self.closedFrameStreak + 1 : 0
                 // ~3 frames at 15 fps: long enough to not be a blink.
                 self.personEyesClosed = self.closedFrameStreak >= 3
-                if let l = estimate.leftEyeOpenness {
-                    self.personLeftOpen += (l - self.personLeftOpen) * 0.5
-                }
-                if let r = estimate.rightEyeOpenness {
-                    self.personRightOpen += (r - self.personRightOpen) * 0.5
+                // Big-action detection with short streaks for stability:
+                // a wink is one eye clearly shut while the other is clearly
+                // open; wide is both well above relaxed, held a beat.
+                if let l = estimate.leftEyeOpenness, let r = estimate.rightEyeOpenness {
+                    self.winkLeftStreak = (l < 0.3 && r > 0.6) ? self.winkLeftStreak + 1 : 0
+                    self.winkRightStreak = (r < 0.3 && l > 0.6) ? self.winkRightStreak + 1 : 0
+                    self.wideStreak = ((l + r) / 2 > 1.18) ? self.wideStreak + 1 : 0
+                    self.personWinkLeft = self.winkLeftStreak >= 2
+                    self.personWinkRight = self.winkRightStreak >= 2
+                    self.personWide = self.wideStreak >= 2
                 }
             }
             if let depth = frame.depthMM { self.lastDistanceMM = Int(depth) }
