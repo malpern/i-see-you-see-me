@@ -309,24 +309,34 @@ struct Eye: View {
     }
 
     /// The visible lid line plus lashes, riding the lid edge — drawn outside
-    /// the eyeball clip so lashes can flare past the eye outline.
+    /// the eyeball clip so lashes can flare past the eye outline, but
+    /// clamped to the ellipse's actual width at the lid's height so nothing
+    /// floats beyond the eye outline.
     private func lidDressing(w: CGFloat, h: CGFloat) -> some View {
         let lashColor = Color(red: 0.16, green: 0.14, blue: 0.13)
+        let edge = lidEdge(h: h)
+        // Ellipse half-width at the lid's effective height.
+        let yNorm = 1 - 2 * min(h, edge + h * 0.05) / h
+        let halfW = (w / 2) * sqrt(max(0.05, 1 - yNorm * yNorm))
+        let lineW = halfW * 2
+
         // Lashes flare from the outer half of the lid.
-        let ts: [CGFloat] = mirrored ? [0.72, 0.84, 0.94] : [0.28, 0.16, 0.06]
+        let ts: [CGFloat] = mirrored ? [0.78, 0.88, 0.97] : [0.22, 0.12, 0.03]
         let angles: [Double] = (mirrored ? [22.0, 34, 48] : [-22.0, -34, -48])
 
         return ZStack {
-            LidShape(edge: lidEdge(h: h), bulge: h * 0.10, edgeOnly: true)
+            LidShape(edge: edge, bulge: h * 0.08, edgeOnly: true)
                 .stroke(Color(white: 0.30), style: StrokeStyle(lineWidth: h * 0.03, lineCap: .round))
+                .frame(width: lineW, height: h)
 
             ForEach(0..<3, id: \.self) { i in
                 Capsule()
                     .fill(lashColor)
                     .frame(width: h * 0.022, height: h * 0.13)
                     .rotationEffect(.degrees(angles[i]), anchor: .bottom)
-                    .position(x: ts[i] * w, y: lashY(t: ts[i], h: h) - h * 0.065)
+                    .position(x: ts[i] * lineW, y: lashY(t: ts[i], h: h) - h * 0.065)
             }
+            .frame(width: lineW, height: h)
         }
         .frame(width: w, height: h)
         .animation(.easeInOut(duration: 0.1), value: openness)
