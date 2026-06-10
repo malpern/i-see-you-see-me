@@ -103,6 +103,13 @@ struct EyesView: View {
             .padding(28)
         }
         .onAppear { state.start() }
+        .onChange(of: state.blinkCount) { _, _ in
+            // You blink, it blinks. The tiny delay reads as a response,
+            // not a coincidence.
+            guard !blink else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) { runBlink() }
+            nextBlinkAt = Date().addingTimeInterval(Double.random(in: 1.5...4.5))
+        }
         .onChange(of: state.engineState) { old, new in
             if old == .empty, new != .empty {
                 // Someone appeared: startle, and snap the gaze to them.

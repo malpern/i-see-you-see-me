@@ -12,6 +12,8 @@ struct AttentionEstimate {
     let isLooking: Bool
     /// Face center in the frame, normalized 0-1 (Vision coordinates: y up).
     var faceCenter: CGPoint? = nil
+    /// True while the person's eyes are closed (blink or shut).
+    var eyesClosed: Bool = false
 }
 
 /// A swappable attention estimator — the heart of the modular architecture.
@@ -32,7 +34,8 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
     var pitchThresholdDegrees: Double = 18
 
     func estimate(from frame: SensorFrame) -> AttentionEstimate {
-        let request = VNDetectFaceRectanglesRequest()
+        // Landmarks (not just rectangles): the eye contours give us blinks.
+        let request = VNDetectFaceLandmarksRequest()
         let handler = VNImageRequestHandler(cgImage: frame.image, options: [:])
         do {
             try handler.perform([request])
@@ -55,8 +58,29 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
             yawDegrees: yaw,
             pitchDegrees: pitch,
             isLooking: looking,
-            faceCenter: CGPoint(x: face.boundingBox.midX, y: face.boundingBox.midY)
+            faceCenter: CGPoint(x: face.boundingBox.midX, y: face.boundingBox.midY),
+            eyesClosed: Self.eyesClosed(face)
         )
+    }
+
+    /// Eye-aspect-ratio blink detection: when the lid closes, the eye
+    /// contour's height collapses relative to its width.
+    private static func eyesClosed(_ face: VNFaceObservation) -> Bool {
+        guard let landmarks = face.landmarks,
+              let left = landmarks.leftEye, let right = landmarks.rightEye
+        else { return false }
+
+        func aspect(_ region: VNFaceLandmarkRegion2D) -> CGFloat {
+            let pts = region.normalizedPoints
+            guard pts.count >= 4,
+                  let minX = pts.map(\.x).min(), let maxX = pts.map(\.x).max(),
+                  let minY = pts.map(\.y).min(), let maxY = pts.map(\.y).max(),
+                  maxX > minX
+            else { return 1 }
+            return (maxY - minY) / (maxX - minX)
+        }
+
+        return (aspect(left) + aspect(right)) / 2 < 0.18
     }
 }
 

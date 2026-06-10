@@ -23,6 +23,9 @@ final class AppState: ObservableObject {
     @Published private(set) var lastDistanceMM: Int?
     /// Where the face is in the frame (normalized, Vision coords: y up).
     @Published private(set) var faceCenter: CGPoint?
+    /// Increments on each detected blink (rising edge of eyes-closed).
+    @Published private(set) var blinkCount = 0
+    private var eyesWereClosed = false
 
     private var source: SensorSource?
     private let estimator: AttentionEstimator = VisionHeadPoseEstimator()
@@ -71,6 +74,10 @@ final class AppState: ObservableObject {
                 self.lastYaw = estimate.yawDegrees
                 self.lastPitch = estimate.pitchDegrees
                 self.faceCenter = estimate.faceCenter
+                if estimate.eyesClosed, !self.eyesWereClosed {
+                    self.blinkCount += 1
+                }
+                self.eyesWereClosed = estimate.eyesClosed
             }
             if let depth = frame.depthMM { self.lastDistanceMM = Int(depth) }
         }

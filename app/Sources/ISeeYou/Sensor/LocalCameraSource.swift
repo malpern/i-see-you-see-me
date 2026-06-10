@@ -13,8 +13,9 @@ final class LocalCameraSource: NSObject, SensorSource, AVCaptureVideoDataOutputS
     private let queue = DispatchQueue(label: "iseeyou.camera")
     private let ciContext = CIContext()
     private var lastFrameTime = Date.distantPast
-    /// Vision + the state machine don't need more than ~10 fps.
-    private let minFrameInterval: TimeInterval = 0.1
+    /// ~15 fps: enough for the state machine, and fast enough that a
+    /// ~150 ms human blink lands on at least one frame.
+    private let minFrameInterval: TimeInterval = 1.0 / 15.0
 
     func start() {
         AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
