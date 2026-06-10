@@ -255,14 +255,19 @@ struct Eye: View {
         .aspectRatio(1.15, contentMode: .fit)
     }
 
-    /// Relaxed brows sit low and tilt gently down toward the temple;
-    /// raised brows lift and arch.
+    /// A curved arc that follows the eye's own top curvature — drawn as a
+    /// trimmed ellipse stroke so it never reads as a pasted-on stick.
+    /// Relaxed, it hugs the lid; raised, it lifts away and flattens a touch.
     private func brow(w: CGFloat, h: CGFloat) -> some View {
-        Capsule()
-            .fill(Color(red: 0.45, green: 0.38, blue: 0.33))
-            .frame(width: w * 0.74, height: h * 0.075)
-            .rotationEffect(.degrees((mirrored ? -1 : 1) * (5 - browRaise * 12)))
-            .offset(y: -h * (0.48 + browRaise * 0.17) + pupilOffset.height * h * 0.03)
+        Ellipse()
+            .trim(from: 0.62, to: 0.88)
+            .stroke(
+                Color(white: 0.42),
+                style: StrokeStyle(lineWidth: h * 0.055, lineCap: .round)
+            )
+            .frame(width: w * 0.96, height: h * (1.0 - browRaise * 0.12))
+            .offset(y: -h * (0.10 + browRaise * 0.16) + pupilOffset.height * h * 0.03)
+            .rotationEffect(.degrees((mirrored ? -1 : 1) * browRaise * 3))
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: browRaise)
     }
 
