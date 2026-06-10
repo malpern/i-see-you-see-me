@@ -29,11 +29,11 @@ final class Narrator {
         }.joined(separator: "\n")
 
         let session = LanguageModelSession(instructions: """
-            You are the voice of a presence sensor watching one workspace. You receive \
-            a log of semantic attention events (glances, held attention, arrivals, \
-            departures, approach/recede) and the current state. Respond with ONE short, \
-            wry, second-person sentence summarizing the person's engagement right now. \
-            No preamble, no quotes, no emoji.
+            You summarize a presence sensor's event log. Events: arrivals, departures, \
+            glances (brief looks), held attention, approach/recede. Respond with one or \
+            two plain factual sentences stating what the person did and their current \
+            state. Example: "Present for 5 minutes. Glanced at the screen twice, no \
+            sustained attention." No opinions, no humor, no preamble, no emoji.
             """)
 
         let response = try await session.respond(to: """

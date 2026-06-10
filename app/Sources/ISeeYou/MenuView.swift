@@ -54,6 +54,7 @@ struct MenuView: View {
             }
             Text(state.narration)
                 .font(.callout.italic())
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)
@@ -61,35 +62,32 @@ struct MenuView: View {
     }
 
     private var eventFeed: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                if state.events.isEmpty {
-                    Text("No events yet — step into frame.")
-                        .font(.caption)
+        VStack(alignment: .leading, spacing: 6) {
+            if state.events.isEmpty {
+                Text("No events yet — step into frame.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(state.events.prefix(8)) { event in
+                HStack(spacing: 8) {
+                    Image(systemName: event.symbolName)
+                        .frame(width: 18)
                         .foregroundStyle(.secondary)
-                }
-                ForEach(state.events) { event in
-                    HStack(spacing: 8) {
-                        Image(systemName: event.symbolName)
-                            .frame(width: 18)
+                    Text(event.label)
+                        .font(.callout)
+                    if let ms = event.durationMS {
+                        Text("\(String(format: "%.1f", Double(ms) / 1000))s")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(event.label)
-                            .font(.callout)
-                        if let ms = event.durationMS {
-                            Text("\(String(format: "%.1f", Double(ms) / 1000))s")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(event.timestamp, style: .time)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
                     }
+                    Spacer()
+                    Text(event.timestamp, style: .time)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxHeight: 220)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var footer: some View {
