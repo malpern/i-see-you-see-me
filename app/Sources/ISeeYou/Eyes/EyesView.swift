@@ -4,22 +4,23 @@ import SwiftUI
 /// until the presence engine says you're looking — then they look back at you.
 /// Note what this view consumes: `state.engineState` only. No frames, no
 /// landmarks. Any app this simple can sit on top of the platform.
+///
+/// Movement model, loosely borrowed from how eyes actually move:
+/// - Saccades: fast ballistic jumps (~120-180 ms) to a new target at
+///   irregular intervals (0.5-3 s), sometimes just a small re-fixation.
+/// - Fixation drift: continuous sub-degree wander while "holding" a target.
+/// - Blinks: irregular, occasionally doubled.
 struct EyesView: View {
     @ObservedObject var state: AppState
 
-    /// Normalized pupil wander target, x/y in -1...1. Never near center —
-    /// idle eyes look *away*.
-    @State private var wanderTarget = CGSize(width: -0.7, height: 0.1)
+    /// Normalized fixation target, x/y in -1...1.
+    @State private var fixation = CGSize(width: -0.6, height: 0.05)
+    @State private var nextSaccadeAt = Date()
     @State private var blink = false
 
-    private let wanderTimer = Timer.publish(every: 1.7, on: .main, in: .common).autoconnect()
-    private let blinkTimer = Timer.publish(every: 0.9, on: .main, in: .common).autoconnect()
+    private let tick = Timer.publish(every: 0.18, on: .main, in: .common).autoconnect()
 
     private var isWatched: Bool { state.engineState == .looking }
-
-    private var pupilOffset: CGSize {
-        isWatched ? .zero : wanderTarget
-    }
 
     /// 1 = wide open. Droopy half-lids when nobody's around.
     private var openness: Double {
@@ -40,9 +41,22 @@ struct EyesView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 18) {
-                HStack(spacing: 36) {
-                    Eye(pupilOffset: pupilOffset, openness: openness, dilated: isWatched)
-                    Eye(pupilOffset: pupilOffset, openness: openness, dilated: isWatched)
+                // Fixation drift: continuous, tiny, never still — this is what
+                // makes them feel alive rather than animated.
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                    let t = context.date.timeIntervalSinceReferenceDate
+                    let driftAmp = isWatched ? 0.018 : 0.045
+                    let drift = CGSize(
+                        width: (sin(t * 1.9) * 0.6 + sin(t * 3.7 + 1.3) * 0.4) * driftAmp,
+                        height: (cos(t * 2.3 + 0.7) * 0.6 + sin(t * 4.1) * 0.4) * driftAmp
+                    )
+                    let base = isWatched ? .zero : fixation
+                    let offset = CGSize(width: base.width + drift.width, height: base.height + drift.height)
+
+                    HStack(spacing: 36) {
+                        Eye(pupilOffset: offset, openness: openness, dilated: isWatched)
+                        Eye(pupilOffset: offset, openness: openness, dilated: isWatched)
+                    }
                 }
                 .padding(.horizontal, 40)
 
@@ -54,25 +68,53 @@ struct EyesView: View {
             .padding(28)
         }
         .onAppear { state.start() }
-        .onReceive(wanderTimer) { _ in
-            guard !isWatched else { return }
-            // New idle glance: pick a side, never the middle.
-            let side: Double = Bool.random() ? 1 : -1
-            withAnimation(.easeInOut(duration: 0.55)) {
-                wanderTarget = CGSize(
-                    width: side * Double.random(in: 0.45...0.9),
-                    height: Double.random(in: -0.25...0.3)
-                )
-            }
+        .onReceive(tick) { now in
+            saccadeIfDue(now)
+            maybeBlink()
         }
-        .onReceive(blinkTimer) { _ in
-            guard !blink, Double.random(in: 0..<1.0) < 0.22 else { return }
-            withAnimation(.easeIn(duration: 0.07)) { blink = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.11) {
-                withAnimation(.easeOut(duration: 0.12)) { blink = false }
-            }
+    }
+
+    private func saccadeIfDue(_ now: Date) {
+        guard !isWatched, now >= nextSaccadeAt else { return }
+
+        let newFixation: CGSize
+        if Double.random(in: 0..<1) < 0.35 {
+            // Small re-fixation near the current spot.
+            newFixation = CGSize(
+                width: max(-0.95, min(0.95, fixation.width + Double.random(in: -0.22...0.22))),
+                height: max(-0.4, min(0.45, fixation.height + Double.random(in: -0.15...0.15)))
+            )
+        } else {
+            // Full saccade somewhere new — usually sideways, sometimes up/down,
+            // occasionally sweeping across to the other side.
+            let side: Double = Double.random(in: 0..<1) < 0.6 ? (fixation.width < 0 ? 1 : -1) : (fixation.width < 0 ? -1 : 1)
+            newFixation = CGSize(
+                width: side * Double.random(in: 0.25...0.9),
+                height: Double.random(in: -0.35...0.4)
+            )
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.72), value: isWatched)
+
+        // Saccades are ballistic: fast out, no bounce.
+        withAnimation(.easeOut(duration: Double.random(in: 0.12...0.18))) {
+            fixation = newFixation
+        }
+        nextSaccadeAt = now.addingTimeInterval(Double.random(in: 0.5...3.0))
+    }
+
+    private func maybeBlink() {
+        guard !blink, Double.random(in: 0..<1) < 0.045 else { return }
+        runBlink()
+        // Occasionally a quick double blink.
+        if Double.random(in: 0..<1) < 0.25 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { runBlink() }
+        }
+    }
+
+    private func runBlink() {
+        withAnimation(.easeIn(duration: 0.06)) { blink = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.easeOut(duration: 0.14)) { blink = false }
+        }
     }
 
     private var statusLine: String {
@@ -133,8 +175,7 @@ struct Eye: View {
                     x: pupilOffset.width * maxOffX,
                     y: pupilOffset.height * maxOffY
                 )
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: pupilOffset)
-                .animation(.spring(response: 0.35, dampingFraction: 0.6), value: dilated)
+                .animation(.spring(response: 0.3, dampingFraction: 0.75), value: dilated)
 
                 // Eyelid drops from the top; same color as the backdrop.
                 Ellipse()

@@ -52,9 +52,11 @@ final class MultimodalAttentionEstimator: AttentionEstimator {
             defer { semaphore.signal() }
             do {
                 // WWDC26: image attachments ride along with the text prompt.
+                // Attachment<ImageAttachmentContent> is PromptRepresentable,
+                // so it composes directly in the PromptBuilder.
                 let prompt = Prompt {
                     "Assess presence and attention in this frame."
-                    PromptAttachment(image: frame.image)
+                    Attachment(frame.image)
                 }
                 let assessment = try await session.respond(
                     to: prompt,
