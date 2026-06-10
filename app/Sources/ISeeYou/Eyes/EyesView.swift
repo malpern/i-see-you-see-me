@@ -18,6 +18,10 @@ struct EyesView: View {
     @State private var nextSaccadeAt = Date()
     @State private var blink = false
     @State private var nextBlinkAt = Date().addingTimeInterval(1.5)
+    /// Startle reflex window after someone appears.
+    @State private var startledUntil = Date.distantPast
+    /// When the room emptied — drives the sleepiness ramp.
+    @State private var emptySince: Date?
 
     private var isWatched: Bool { state.engineState == .looking }
 
@@ -31,14 +35,29 @@ struct EyesView: View {
         return CGSize(width: x, height: y)
     }
 
-    /// 1 = wide open, 0 = fully closed. Droopy half-lids when nobody's around.
-    private var openness: Double {
+    /// 1 = wide open, 0 = fully closed. Alone, the lids droop further the
+    /// longer nobody's around (sleepiness ramp over ~90 s).
+    private func opennessAt(_ now: Date) -> Double {
         if blink { return 0.0 }
         switch state.engineState {
-        case .empty: return 0.55
+        case .empty:
+            let elapsed = now.timeIntervalSince(emptySince ?? now)
+            return max(0.3, 0.62 - elapsed / 90.0 * 0.32)
         case .present: return 0.92
         case .looking: return 1.0
         }
+    }
+
+    /// Pupil dilation 0...1: attention dilates, and proximity (OAK depth)
+    /// dilates further — walk up to it and the pupils visibly bloom.
+    private func dilation(startled: Bool) -> Double {
+        var d = isWatched ? 0.65 : 0.2
+        if let mm = state.lastDistanceMM {
+            let proximity = max(0, min(1, (2200.0 - Double(mm)) / 1700.0))
+            d += proximity * 0.35
+        }
+        if startled { d += 0.3 }
+        return min(1.0, d)
     }
 
     var body: some View {
@@ -63,11 +82,16 @@ struct EyesView: View {
                     // and keep aiming as they move.
                     let base = isWatched ? personTarget : fixation
                     let offset = CGSize(width: base.width + drift.width, height: base.height + drift.height)
+                    let startled = context.date < startledUntil
+                    let open = opennessAt(context.date)
+                    let dilate = dilation(startled: startled)
 
                     HStack(spacing: 36) {
-                        Eye(pupilOffset: offset, openness: openness, dilated: isWatched)
-                        Eye(pupilOffset: offset, openness: openness, dilated: isWatched)
+                        Eye(pupilOffset: offset, openness: open, dilation: dilate)
+                        Eye(pupilOffset: offset, openness: open, dilation: dilate)
                     }
+                    .scaleEffect(startled ? 1.06 : 1.0)
+                    .animation(.spring(response: 0.22, dampingFraction: 0.55), value: startled)
                 }
                 .padding(.horizontal, 40)
 
@@ -79,6 +103,14 @@ struct EyesView: View {
             .padding(28)
         }
         .onAppear { state.start() }
+        .onChange(of: state.engineState) { old, new in
+            if old == .empty, new != .empty {
+                // Someone appeared: startle, and snap the gaze to them.
+                startledUntil = Date().addingTimeInterval(0.9)
+                withAnimation(.easeOut(duration: 0.12)) { fixation = personTarget }
+            }
+            emptySince = new == .empty ? Date() : nil
+        }
         // A Combine timer property gets recreated every time AppState
         // publishes (~10 Hz with a face in frame) and never fires. .task is
         // keyed to view identity and survives re-renders.
@@ -144,7 +176,10 @@ struct EyesView: View {
     }
 
     private func runBlink() {
-        let closedFor = Double.random(in: 0.07...0.16)
+        // Drowsy blinks when alone are slower and stay shut longer.
+        let closedFor = state.engineState == .empty
+            ? Double.random(in: 0.18...0.45)
+            : Double.random(in: 0.07...0.16)
         withAnimation(.easeIn(duration: 0.06)) { blink = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06 + closedFor) {
             withAnimation(.easeOut(duration: 0.13)) { blink = false }
@@ -160,14 +195,14 @@ struct EyesView: View {
 struct Eye: View {
     var pupilOffset: CGSize   // normalized -1...1
     var openness: Double      // 0 closed ... 1 wide open
-    var dilated: Bool
+    var dilation: Double      // 0 constricted ... 1 fully dilated
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
-            let irisD = min(w, h) * (dilated ? 0.58 : 0.5)
-            let pupilD = irisD * (dilated ? 0.62 : 0.44)
+            let irisD = min(w, h) * (0.48 + 0.10 * dilation)
+            let pupilD = irisD * (0.40 + 0.28 * dilation)
             let maxOffX = (w - irisD) / 2 * 0.8
             let maxOffY = (h - irisD) / 2 * 0.8
 
@@ -209,7 +244,7 @@ struct Eye: View {
                     x: pupilOffset.width * maxOffX,
                     y: pupilOffset.height * maxOffY
                 )
-                .animation(.spring(response: 0.3, dampingFraction: 0.75), value: dilated)
+                .animation(.spring(response: 0.45, dampingFraction: 0.8), value: dilation)
 
                 // Eyelid drops from the top; same color as the backdrop.
                 // openness 0 puts the lid's bottom edge exactly at the eye's
