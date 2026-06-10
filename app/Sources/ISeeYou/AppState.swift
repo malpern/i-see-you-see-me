@@ -29,8 +29,12 @@ final class AppState: ObservableObject {
     private let processingQueue = DispatchQueue(label: "iseeyou.pipeline")
     private var narrationTask: Task<Void, Never>?
     private var eventsSinceNarration = 0
+    private var started = false
 
     func start() {
+        // Both the eyes window and the menu call this on appear.
+        guard !started else { return }
+        started = true
         engine.onEvent = { [weak self] event in
             DispatchQueue.main.async { self?.append(event) }
         }

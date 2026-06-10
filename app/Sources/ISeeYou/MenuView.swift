@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuView: View {
     @ObservedObject var state: AppState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -100,6 +101,11 @@ struct MenuView: View {
             .pickerStyle(.menu)
             .font(.caption)
             Spacer()
+            Button("Eyes") {
+                openWindow(id: "eyes")
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            .font(.caption)
             Button("Quit") { NSApp.terminate(nil) }
                 .font(.caption)
         }
