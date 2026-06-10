@@ -42,6 +42,9 @@ struct EyesView: View {
     /// longer nobody's around (sleepiness ramp over ~90 s).
     private func opennessAt(_ now: Date) -> Double {
         if blink { return 0.0 }
+        // Mirror sustained closure: your eyes shut, its eyes shut, until
+        // yours open again.
+        if state.personEyesClosed { return 0.0 }
         switch state.engineState {
         case .empty:
             let elapsed = now.timeIntervalSince(emptySince ?? now)

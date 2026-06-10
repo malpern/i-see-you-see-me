@@ -27,7 +27,11 @@ final class AppState: ObservableObject {
     @Published private(set) var faceCenter: CGPoint?
     /// Increments on each detected blink (rising edge of eyes-closed).
     @Published private(set) var blinkCount = 0
+    /// True while the person's eyes have stayed closed (~0.2s+), so the
+    /// app's eyes can mirror sustained closure, not just blinks.
+    @Published private(set) var personEyesClosed = false
     private var eyesWereClosed = false
+    private var closedFrameStreak = 0
 
     private var source: SensorSource?
     private let estimator: AttentionEstimator = VisionHeadPoseEstimator()
@@ -99,6 +103,9 @@ final class AppState: ObservableObject {
                     self.blinkCount += 1
                 }
                 self.eyesWereClosed = estimate.eyesClosed
+                self.closedFrameStreak = estimate.eyesClosed ? self.closedFrameStreak + 1 : 0
+                // ~3 frames at 15 fps: long enough to not be a blink.
+                self.personEyesClosed = self.closedFrameStreak >= 3
             }
             if let depth = frame.depthMM { self.lastDistanceMM = Int(depth) }
         }
