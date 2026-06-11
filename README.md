@@ -62,16 +62,16 @@ Answer questions like:
 - **Primary dev machine:** MacBook Air M4
 - **Secondary compute:** Mac Mini M4 Pro (64 GB) for model experimentation, logging, training
 
-## Software Direction
+## Software Stack
 
-Primary stack under evaluation:
+In use today:
 
-- **DepthAI** — camera control, depth acquisition, face/person detection, pipeline management
-- **OpenCV** — frame manipulation, geometry, debug overlays, calibration
-- **MediaPipe** — face mesh / head pose / eye landmarks, used selectively
-- **Modern vision models** — ONNX Runtime, CoreML, lightweight gaze-estimation models, optionally Florence- or SmolVLM-class models
+- **DepthAI (v3 API)** — OAK-D camera control, stereo depth acquisition, pipeline management ([sensor/](sensor/))
+- **OpenCV** — JPEG encoding and frame manipulation in the sensor service
+- **Vision framework** — face detection, head pose (yaw/pitch/roll), eye landmarks, and blink detection, on-device (`VisionHeadPoseEstimator`)
+- **Foundation Models** — Apple's on-device LLM narrates the event stream (macOS 26); a multimodal estimator is staged for macOS 27
 
-Traditional geometry-based approaches will be evaluated against VLM approaches for latency-sensitive tasks. Newer is not assumed to be better.
+Still under evaluation for the gaze-estimation upgrade: learned gaze models (e.g. L2CS-Net via ONNX), MediaPipe face mesh, and VLM-class approaches. Traditional geometry-based approaches are evaluated against learned ones for latency-sensitive tasks — newer is not assumed to be better.
 
 ## Event Stream
 
@@ -106,15 +106,15 @@ presenceEngine.subscribe { event in
 | Attention detection | Reliable with glasses, stable under office lighting, low false positives, low jitter |
 | Engagement classification | Distinguish passing glance / short look / focused attention |
 
-## Calibration
+## Calibration (planned)
 
-The system supports calibration of arbitrary targets (monitors, e-ink displays, wall panels, appliances, kiosks). A target is declared like:
+The system will support calibration of arbitrary targets (monitors, e-ink displays, wall panels, appliances, kiosks). A target is declared like:
 
 ```json
 { "target": "left_monitor" }
 ```
 
-…and the system estimates whether attention is directed at it.
+…and the system estimates whether attention is directed at it. Today, attention is reported relative to the camera only.
 
 ## Architecture Principles
 
@@ -138,4 +138,13 @@ The current objective is the reusable sensing platform — not the apps built on
 
 ## Status
 
-Greenfield. No code yet — this repo currently holds the project brief.
+Working end-to-end. The macOS menu bar app ([app/](app/), SwiftPM, macOS 26+) runs the full pipeline: Vision-framework head pose estimation, the `AttentionEngine` state machine (hysteresis + dwell timers), the semantic event feed, on-device Foundation Models narration, and the shader-rendered eyes window. The Python sensor service ([sensor/](sensor/)) streams OAK-D Lite frames and depth over WebSocket, with a `--mock` mode that runs the whole stack without hardware.
+
+Not done yet:
+
+- **Calibration of arbitrary targets** — attention is currently relative to the camera only
+- **Learned gaze estimation** — head-pose geometry is the current signal; eye-gaze models are still under evaluation
+- **Test suite** — no automated tests checked in yet
+- **macOS 27 multimodal estimator** — [MultimodalAttentionEstimator.swift](app/Sources/ISeeYou/Narration/MultimodalAttentionEstimator.swift) compiles under the Xcode 27 SDK but is gated off until macOS 27
+
+See [docs/PLAN.md](docs/PLAN.md) for the phased plan and [docs/DEMO.md](docs/DEMO.md) for the demo walkthrough.
