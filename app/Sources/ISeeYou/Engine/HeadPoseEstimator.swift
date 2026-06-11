@@ -36,11 +36,22 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
     /// below/above camera; tighter on yaw, the stronger looking-away signal.
     var yawThresholdDegrees: Double = 22
     var pitchThresholdDegrees: Double = 18
+    /// Idle mode: rectangles-only detection (much cheaper than the landmark
+    /// network) — enough to notice someone arriving, nothing more.
+    var cheapMode = false
 
     func estimate(from frame: SensorFrame) -> AttentionEstimate {
         // Landmarks (not just rectangles): the eye contours give us blinks.
-        let request = VNDetectFaceLandmarksRequest()
-        let handler = VNImageRequestHandler(cgImage: frame.image, options: [:])
+        let request: VNImageBasedRequest = cheapMode
+            ? VNDetectFaceRectanglesRequest()
+            : VNDetectFaceLandmarksRequest()
+        let handler: VNImageRequestHandler
+        switch frame.payload {
+        case .pixelBuffer(let buffer):
+            handler = VNImageRequestHandler(cvPixelBuffer: buffer, options: [:])
+        case .cgImage(let image):
+            handler = VNImageRequestHandler(cgImage: image, options: [:])
+        }
         do {
             try handler.perform([request])
         } catch {
@@ -48,7 +59,7 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
         }
 
         // Largest face = nearest person. Multi-person policy comes later (PLAN §6).
-        guard let face = (request.results ?? [])
+        guard let face = (request.results as? [VNFaceObservation] ?? [])
             .max(by: { $0.boundingBox.area < $1.boundingBox.area })
         else {
             return AttentionEstimate(facePresent: false, yawDegrees: 0, pitchDegrees: 0, isLooking: false)

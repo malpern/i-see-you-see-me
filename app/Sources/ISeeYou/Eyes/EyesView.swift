@@ -100,7 +100,9 @@ struct EyesView: View {
             VStack(spacing: 18) {
                 // Fixation drift: continuous, tiny, never still — this is what
                 // makes them feel alive rather than animated.
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                // Idle eyes don't need 30 fps — drift at 8 fps reads the
+                // same on a drowsing face and costs a fraction of the GPU.
+                TimelineView(.animation(minimumInterval: state.engineState == .empty ? 1.0 / 8.0 : 1.0 / 30.0)) { context in
                     let t = context.date.timeIntervalSinceReferenceDate
                     let driftAmp = isWatched ? 0.018 : 0.045
                     let drift = CGSize(
@@ -141,15 +143,18 @@ struct EyesView: View {
                         // runs a hair sleepier than the left.
                         Eye(pupilOffset: offsetR, openness: open * 0.97, dilation: dilate, browRaise: brow * 0.94, mirrored: true, style: state.eyeStyle)
                     }
-                    .background(
-                        RadialGradient(
-                            colors: [Color.white.opacity(0.07), .clear],
-                            center: .center, startRadius: 20, endRadius: 300
-                        )
-                    )
                     .scaleEffect(startled ? 1.06 : 1.0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.55), value: startled)
                 }
+                // Static glow lives OUTSIDE the TimelineView: gradients
+                // render on the CPU, and inside the timeline this repainted
+                // 30x/s for no visual change.
+                .background(
+                    RadialGradient(
+                        colors: [Color.white.opacity(0.07), .clear],
+                        center: .center, startRadius: 20, endRadius: 300
+                    )
+                )
                 .padding(.horizontal, 40)
 
                 Group {

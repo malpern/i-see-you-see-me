@@ -70,7 +70,7 @@ final class OAKSource: NSObject, SensorSource {
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
         else { return }
         onStatus?("OAK-D Lite streaming")
-        onFrame?(SensorFrame(image: cgImage, depthMM: msg.depth_mm, timestamp: Date()))
+        onFrame?(SensorFrame(payload: .cgImage(cgImage), depthMM: msg.depth_mm, timestamp: Date()))
     }
 
     private func scheduleReconnect() {

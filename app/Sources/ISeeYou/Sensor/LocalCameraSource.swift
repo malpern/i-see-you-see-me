@@ -1,5 +1,4 @@
 import AVFoundation
-import CoreImage
 import Foundation
 
 /// Fallback sensor: the Mac's built-in camera via AVFoundation.
@@ -11,7 +10,6 @@ final class LocalCameraSource: NSObject, SensorSource, AVCaptureVideoDataOutputS
 
     private let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "iseeyou.camera")
-    private let ciContext = CIContext()
     private var lastFrameTime = Date.distantPast
     /// ~15 fps: enough for the state machine, and fast enough that a
     /// ~150 ms human blink lands on at least one frame.
@@ -74,8 +72,6 @@ final class LocalCameraSource: NSObject, SensorSource, AVCaptureVideoDataOutputS
         lastFrameTime = now
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else { return }
-        onFrame?(SensorFrame(image: cgImage, depthMM: nil, timestamp: now))
+        onFrame?(SensorFrame(payload: .pixelBuffer(pixelBuffer), depthMM: nil, timestamp: now))
     }
 }

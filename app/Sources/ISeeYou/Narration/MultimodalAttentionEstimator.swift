@@ -56,7 +56,10 @@ final class MultimodalAttentionEstimator: AttentionEstimator {
                 // so it composes directly in the PromptBuilder.
                 let prompt = Prompt {
                     "Assess presence and attention in this frame."
-                    Attachment(frame.image)
+                    switch frame.payload {
+                    case .pixelBuffer(let buffer): Attachment(buffer)
+                    case .cgImage(let image): Attachment(image)
+                    }
                 }
                 let assessment = try await session.respond(
                     to: prompt,

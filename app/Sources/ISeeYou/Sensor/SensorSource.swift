@@ -1,10 +1,19 @@
 import CoreGraphics
+import CoreVideo
 import Foundation
 
 /// One observation from a sensor: a frame, optionally enriched with depth.
 /// The sensor produces observations; it never interprets them.
+/// Frames carry their native representation — converting pixel buffers to
+/// CGImage 15x/s costs a full-frame render + allocation each time, and
+/// Vision consumes both directly.
 struct SensorFrame {
-    let image: CGImage
+    enum Payload {
+        case pixelBuffer(CVPixelBuffer)
+        case cgImage(CGImage)
+    }
+
+    let payload: Payload
     /// Median depth of the central region in millimeters (depth sensors only).
     let depthMM: Double?
     let timestamp: Date

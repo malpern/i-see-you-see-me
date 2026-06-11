@@ -170,7 +170,19 @@ final class AppState: ObservableObject {
         newSource.start()
     }
 
+    /// Timestamp of the last frame run through Vision (processing queue only).
+    private nonisolated(unsafe) var lastProcessedAt = Date.distantPast
+
     nonisolated private func process(_ frame: SensorFrame) {
+        // Tiered power: with the room empty, sample at 2 fps with the cheap
+        // rectangles-only detector — Vision inference is the app's dominant
+        // CPU cost and it buys nothing while nobody's there. Full-rate
+        // landmark processing resumes the moment a face appears.
+        let idle = engine.state == .empty
+        if idle, frame.timestamp.timeIntervalSince(lastProcessedAt) < 0.5 { return }
+        lastProcessedAt = frame.timestamp
+        visionEstimator.cheapMode = idle
+
         let estimate = estimator.estimate(from: frame)
         engine.update(estimate, depthMM: frame.depthMM)
         DispatchQueue.main.async { [weak self] in
