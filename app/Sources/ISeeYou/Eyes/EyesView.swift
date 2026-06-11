@@ -332,7 +332,9 @@ struct EyeAperture: Shape {
         // lower lid.
         let upperY = closeY - CGFloat(openC) * 0.38 * h
             + CGFloat(gazeY * min(1.0, openC)) * 0.05 * h
-        let lowerY = closeY + 0.14 * h * CGFloat(min(1.0, openC))
+        // Lower lid sits at the iris's bottom edge when open — riding higher
+        // crowds the pupil and reads sleepy.
+        let lowerY = closeY + 0.19 * h * CGFloat(min(1.0, openC))
 
         // Subtle canthal tilt: outer corner just slightly higher than inner.
         let inner = CGPoint(x: mirrored ? 0 : w, y: 0.55 * h)
@@ -399,8 +401,8 @@ struct Eye: View {
             let w = geo.size.width
             let h = geo.size.height
             let rect = CGRect(x: 0, y: 0, width: w, height: h)
-            let irisD = min(w, h) * 0.62
-            let pupilD = irisD * (0.34 + 0.24 * dilation)
+            let irisD = min(w, h) * 0.58
+            let pupilD = irisD * (0.38 + 0.26 * dilation)
             let anatomy = EyeAperture.anatomy(
                 open: openness, gazeY: pupilOffset.height, mirrored: mirrored, in: rect
             )
