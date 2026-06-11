@@ -121,9 +121,25 @@ struct EyesView: View {
                     let dilate = smoothDilation
                     let brow = browRaise(startled: startled)
 
+                    // Vergence: real eyes converge on what they fixate. When
+                    // locked on the person, cross inward by an amount driven
+                    // by their measured distance (depth sensor) — parallel
+                    // gaze reads as staring through you at infinity.
+                    let vergence: Double = {
+                        guard isWatched else { return 0 }
+                        if let mm = state.lastDistanceMM, mm > 0 {
+                            return min(0.16, max(0.03, 90.0 / Double(mm)))
+                        }
+                        return 0.06
+                    }()
+                    let offsetL = CGSize(width: offset.width + vergence, height: offset.height)
+                    let offsetR = CGSize(width: offset.width - vergence, height: offset.height)
+
                     HStack(spacing: 36) {
-                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: false, style: state.eyeStyle)
-                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: true, style: state.eyeStyle)
+                        Eye(pupilOffset: offsetL, openness: open, dilation: dilate, browRaise: brow, mirrored: false, style: state.eyeStyle)
+                        // Real faces aren't perfectly mirrored: the right eye
+                        // runs a hair sleepier than the left.
+                        Eye(pupilOffset: offsetR, openness: open * 0.97, dilation: dilate, browRaise: brow * 0.94, mirrored: true, style: state.eyeStyle)
                     }
                     .background(
                         RadialGradient(
@@ -645,16 +661,23 @@ struct Eye: View {
                     }
 
                     // Primary glint + a faint secondary, like a second light
-                    // source — flat single glints are what make cartoon eyes
-                    // look plastic.
-                    Circle()
-                        .fill(.white.opacity(0.9))
-                        .frame(width: pupilD * 0.28, height: pupilD * 0.28)
-                        .offset(x: -pupilD * 0.22, y: -pupilD * 0.22)
-                    Circle()
-                        .fill(.white.opacity(0.35))
-                        .frame(width: pupilD * 0.14, height: pupilD * 0.14)
-                        .offset(x: pupilD * 0.26, y: pupilD * 0.24)
+                    // source. Counter-offset against gaze: a catchlight is a
+                    // reflection of the room, so it mostly stays put while
+                    // the eyeball rotates underneath it.
+                    Group {
+                        Circle()
+                            .fill(.white.opacity(0.9))
+                            .frame(width: pupilD * 0.28, height: pupilD * 0.28)
+                            .offset(x: -pupilD * 0.22, y: -pupilD * 0.22)
+                        Circle()
+                            .fill(.white.opacity(0.35))
+                            .frame(width: pupilD * 0.14, height: pupilD * 0.14)
+                            .offset(x: pupilD * 0.26, y: pupilD * 0.24)
+                    }
+                    .offset(
+                        x: -pupilOffset.width * maxOffX * 0.45,
+                        y: -pupilOffset.height * maxOffY * 0.45
+                    )
                 }
                 .offset(
                     x: pupilOffset.width * maxOffX,

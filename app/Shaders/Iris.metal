@@ -37,6 +37,15 @@ using namespace metal;
     float collar = exp(-pow((r - (pupilR + 0.10)) * 9.0, 2.0));
     col += collar * float3(0.10, 0.09, 0.03) * (1.0 + 0.5 * sin(theta * 17.0));
 
+    // Central heterochromia: the warm amber ring around the pupil that
+    // most real irises carry, fading into the main color.
+    float amber = exp(-pow((r - (pupilR + 0.17)) * 6.5, 2.0));
+    col = mix(col, float3(0.52, 0.40, 0.18), amber * 0.32);
+
+    // Desaturate slightly toward the rim.
+    float grey = dot(col, float3(0.333));
+    col = mix(col, float3(grey), smoothstep(0.72, 1.0, r) * 0.18);
+
     // Limbal ring: dark rim where iris meets sclera.
     col *= mix(1.0, 0.25, smoothstep(0.82, 1.0, r));
 
