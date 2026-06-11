@@ -376,11 +376,14 @@ struct EyeAperture: Shape {
         let h = rect.height
         let openC = max(0.0, open)
 
-        // Style differences: the female shape opens slightly taller and
-        // carries more canthal lift at the outer corner.
-        let travel: CGFloat = style == .female ? 0.41 : 0.38
-        let innerCornerY: CGFloat = style == .female ? 0.56 : 0.55
-        let outerCornerY: CGFloat = style == .female ? 0.465 : 0.49
+        // Sexual dimorphism per the oculoplastics literature: female
+        // fissures are rounder and taller with ~8.5° canthal tilt and a
+        // lifted upper lid; male fissures are narrower, more rectangular,
+        // ~6.5° tilt, with the lid sitting lower over the iris (deep-set).
+        let female = style == .female
+        let travel: CGFloat = female ? 0.40 : 0.33
+        let innerCornerY: CGFloat = female ? 0.565 : 0.545
+        let outerCornerY: CGFloat = female ? 0.455 : 0.505
 
         // Lids meet just below the horizontal midline when closed; the gaze
         // influence fades as the eye closes so the closed line is stable.
@@ -452,10 +455,15 @@ struct Eye: View {
     static let shaderAvailable = Bundle.main.url(forResource: "default", withExtension: "metallib") != nil
 
     var body: some View {
-        if style == .round {
+        switch style {
+        case .round:
             roundEye.aspectRatio(1.15, contentMode: .fit)
-        } else {
-            anatomicalEye.aspectRatio(1.3, contentMode: .fit)
+        case .female:
+            // Rounder orbit.
+            anatomicalEye.aspectRatio(1.28, contentMode: .fit)
+        case .male:
+            // Narrower, more rectangular fissure.
+            anatomicalEye.aspectRatio(1.42, contentMode: .fit)
         }
     }
 
@@ -554,12 +562,18 @@ struct Eye: View {
                     Color(red: 0.30, green: 0.26, blue: 0.24),
                     style: StrokeStyle(lineWidth: h * 0.045, lineCap: .round)
                 )
-            // Supratarsal crease floating above the margin.
-            EyeAperture(open: min(1.4, openness + 0.38), gazeY: pupilOffset.height * 0.6, mirrored: mirrored, style: style, part: .upper)
-                .stroke(
-                    Color(white: 0.20),
-                    style: StrokeStyle(lineWidth: h * 0.02, lineCap: .round)
-                )
+            // Supratarsal crease: HIGH in the female lid (visible pretarsal
+            // platform), LOW and hugging the margin in the male lid (full
+            // upper lid, little show).
+            EyeAperture(
+                open: min(1.4, openness + (style == .female ? 0.46 : 0.16)),
+                gazeY: pupilOffset.height * 0.6,
+                mirrored: mirrored, style: style, part: .upper
+            )
+            .stroke(
+                Color(white: 0.20),
+                style: StrokeStyle(lineWidth: h * 0.02, lineCap: .round)
+            )
             // Lower lid: present but quiet.
             EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored, style: style, part: .lower)
                 .stroke(
@@ -588,19 +602,27 @@ struct Eye: View {
         }
     }
 
-    /// A curved arc that follows the eye's own top curvature — drawn as a
-    /// trimmed ellipse stroke so it never reads as a pasted-on stick.
-    /// Relaxed, it hugs the lid; raised, it lifts away and flattens a touch.
+    /// The brow is the strongest sex cue: male brows are thick, flat, and
+    /// sit low on the orbital rim close to the eye; female brows are thin,
+    /// set higher, and arch with the peak at the lateral third.
     private func brow(w: CGFloat, h: CGFloat) -> some View {
-        Ellipse()
+        let female = style == .female
+        // A shallower source ellipse flattens the male arc.
+        let archHeight: CGFloat = female ? 1.0 : 0.62
+        let thickness: CGFloat = female ? 0.040 : 0.078
+        let lift: CGFloat = female ? 0.20 : 0.07
+        // Lateral-third peak: tilt the arc so the outer end rides higher.
+        let lateralTilt: Double = female ? 5 : 1
+
+        return Ellipse()
             .trim(from: 0.62, to: 0.88)
             .stroke(
-                Color(white: 0.42),
-                style: StrokeStyle(lineWidth: h * 0.055, lineCap: .round)
+                Color(white: female ? 0.40 : 0.45),
+                style: StrokeStyle(lineWidth: h * thickness, lineCap: .round)
             )
-            .frame(width: w * 0.96, height: h * (1.0 - browRaise * 0.12))
-            .offset(y: -h * (0.10 + browRaise * 0.16) + pupilOffset.height * h * 0.03)
-            .rotationEffect(.degrees((mirrored ? -1 : 1) * browRaise * 3))
+            .frame(width: w * 0.96, height: h * (archHeight - browRaise * 0.12))
+            .offset(y: -h * (lift + browRaise * 0.16) + pupilOffset.height * h * 0.03)
+            .rotationEffect(.degrees((mirrored ? -1 : 1) * (browRaise * 3 + lateralTilt)))
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: browRaise)
     }
 
@@ -687,9 +709,10 @@ struct Eye: View {
 
                 if dressed {
                     // Ambient occlusion: the soft shadow the upper lid casts
-                    // on the eyeball, riding the lid edge itself.
+                    // on the eyeball. Heavier for the male style — deep-set
+                    // shadowed eyes are a masculine marker.
                     EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored, style: style, part: .upper)
-                        .stroke(Color.black.opacity(0.32), lineWidth: h * 0.12)
+                        .stroke(Color.black.opacity(style == .female ? 0.26 : 0.42), lineWidth: h * (style == .female ? 0.10 : 0.15))
                         .blur(radius: h * 0.05)
                         .offset(y: h * 0.015)
 
