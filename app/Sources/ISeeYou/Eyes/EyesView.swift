@@ -199,7 +199,7 @@ struct EyesView: View {
                 // smaller range than they turn.
                 let follow = CGSize(
                     width: max(-0.85, min(0.85, -state.lastYaw / 30.0)),
-                    height: max(-0.7, min(0.7, -state.lastPitch / 15.0))
+                    height: max(-0.7, min(0.7, state.lastPitch / 15.0))
                 )
                 gazeFollow.width += (follow.width - gazeFollow.width) * 0.35
                 gazeFollow.height += (follow.height - gazeFollow.height) * 0.35
