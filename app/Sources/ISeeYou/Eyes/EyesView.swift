@@ -47,8 +47,10 @@ struct EyesView: View {
         // Mirror sustained closure: your eyes shut, its eyes shut, until
         // yours open again.
         if state.personEyesClosed { return 0.0 }
-        // Mirror a wink on the matching side (your left → screen-left).
-        if screenLeft ? state.personWinkLeft : state.personWinkRight { return 0.0 }
+        // Mirror a wink on the matching side. Vision's anatomical labels
+        // come through the unmirrored camera, so the swap here is what makes
+        // it behave like a mirror on screen.
+        if screenLeft ? state.personWinkRight : state.personWinkLeft { return 0.0 }
         switch state.engineState {
         case .empty:
             let elapsed = now.timeIntervalSince(emptySince ?? now)
