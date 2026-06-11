@@ -139,8 +139,9 @@ struct EyesView: View {
         .onAppear { state.start() }
         .onChange(of: state.blinkCount) { _, _ in
             // You blink, it blinks. The tiny delay reads as a response,
-            // not a coincidence.
-            guard !blink else { return }
+            // not a coincidence. Suppressed mid-wink — a wink is its own
+            // mirrored gesture, not a blink.
+            guard !blink, !state.personWinkLeft, !state.personWinkRight else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) { runBlink() }
             nextBlinkAt = Date().addingTimeInterval(Double.random(in: 1.5...4.5))
         }

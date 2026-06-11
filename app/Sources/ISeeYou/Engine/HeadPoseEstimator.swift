@@ -94,7 +94,9 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
 
         let la = aspect(left)
         let ra = aspect(right)
-        return ((la + ra) / 2 < 0.18, openness(la), openness(ra))
+        // BOTH eyes must be shut to count as closed/blink — averaging lets a
+        // one-eyed wink hover at the threshold and fire repeated blinks.
+        return (la < 0.18 && ra < 0.18, openness(la), openness(ra))
     }
 }
 
