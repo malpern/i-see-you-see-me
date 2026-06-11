@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import SwiftUI
 
@@ -193,7 +194,24 @@ final class AppState: ObservableObject {
         }
     }
 
+    // Acknowledgment vocalizations: a quiet "mhh" when eye contact begins.
+    private var ackPlayer: AVAudioPlayer?
+    private var lastAckAt = Date.distantPast
+
+    /// Male eyes only; at most one sound per 10s no matter how often the
+    /// look state flips.
+    private func playAcknowledgmentIfDue() {
+        guard eyeStyle == .male else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastAckAt) >= 10 else { return }
+        guard let url = Bundle.main.url(forResource: "mhh\(Int.random(in: 1...4))", withExtension: "wav") else { return }
+        lastAckAt = now
+        ackPlayer = try? AVAudioPlayer(contentsOf: url)
+        ackPlayer?.play()
+    }
+
     private func append(_ event: PresenceEvent) {
+        if event.kind == .lookStarted { playAcknowledgmentIfDue() }
         events.insert(event, at: 0)
         if events.count > 50 { events.removeLast(events.count - 50) }
         eventsSinceNarration += 1
