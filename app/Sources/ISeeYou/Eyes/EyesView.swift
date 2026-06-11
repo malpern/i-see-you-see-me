@@ -176,8 +176,9 @@ struct EyesView: View {
                 smoothDilation += (target - smoothDilation) * 0.22
 
                 // Follow the person's head direction while they look around.
+                // x negated so the on-screen gaze matches mirror expectations.
                 let follow = CGSize(
-                    width: max(-0.85, min(0.85, state.lastYaw / 30.0)),
+                    width: max(-0.85, min(0.85, -state.lastYaw / 30.0)),
                     height: max(-0.5, min(0.5, state.lastPitch / 35.0))
                 )
                 gazeFollow.width += (follow.width - gazeFollow.width) * 0.35
