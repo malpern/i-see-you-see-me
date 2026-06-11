@@ -143,24 +143,20 @@ struct EyesView: View {
                 }
                 .padding(.horizontal, 40)
 
-                Text(isWatched ? "I see you see me." : statusLine)
-                    .font(.system(.title3, design: .rounded).weight(.medium))
-                    .foregroundStyle(isWatched ? .primary : .tertiary)
-                    .animation(.easeInOut(duration: 0.3), value: isWatched)
+                Group {
+                    if let sourceBanner {
+                        Label(sourceBanner, systemImage: "camera.fill")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(isWatched ? "I see you see me." : statusLine)
+                            .foregroundStyle(isWatched ? .primary : .tertiary)
+                    }
+                }
+                .font(.system(.title3, design: .rounded).weight(.medium))
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.3), value: isWatched)
             }
             .padding(28)
-        }
-        .overlay(alignment: .top) {
-            if let sourceBanner {
-                Label(sourceBanner, systemImage: "camera.fill")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(.top, 14)
-                    .transition(.opacity)
-            }
         }
         .onAppear {
             state.start()
