@@ -42,8 +42,23 @@ final class AppState: ObservableObject {
     private var winkRightStreak = 0
     private var wideStreak = 0
 
+    /// How tightly "looking at you" is scored: 0 = relaxed (±30° head cone),
+    /// 1 = strict (±8°). Applied to the estimator live, persisted.
+    @Published var gazeStrictness: Double = UserDefaults.standard.object(forKey: "gazeStrictness") as? Double ?? 0.6 {
+        didSet {
+            UserDefaults.standard.set(gazeStrictness, forKey: "gazeStrictness")
+            applyGazeStrictness()
+        }
+    }
+
+    /// Yaw half-angle (degrees) for the current strictness; shown in the UI.
+    var gazeConeDegrees: Double { 30.0 - gazeStrictness * 22.0 }
+
     private var source: SensorSource?
-    private let estimator: AttentionEstimator = VisionHeadPoseEstimator()
+    // Accessed from the serial processing queue; threshold writes from the
+    // main actor are benign (plain doubles, single reader).
+    private nonisolated(unsafe) let visionEstimator = VisionHeadPoseEstimator()
+    private nonisolated var estimator: AttentionEstimator { visionEstimator }
     private let engine = AttentionEngine()
     private let narrator = Narrator()
     private let processingQueue = DispatchQueue(label: "iseeyou.pipeline")
@@ -53,10 +68,16 @@ final class AppState: ObservableObject {
     private var lastFrameAt = Date()
     private var watchdogTask: Task<Void, Never>?
 
+    private func applyGazeStrictness() {
+        visionEstimator.yawThresholdDegrees = gazeConeDegrees
+        visionEstimator.pitchThresholdDegrees = gazeConeDegrees * 0.8
+    }
+
     func start() {
         // Both the eyes window and the menu call this on appear.
         guard !started else { return }
         started = true
+        applyGazeStrictness()
         watchdogTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))

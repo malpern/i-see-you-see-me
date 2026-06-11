@@ -11,6 +11,7 @@ struct MenuView: View {
             Divider()
             eventFeed
             Divider()
+            gazeFocus
             footer
         }
         .padding(14)
@@ -89,6 +90,20 @@ struct MenuView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var gazeFocus: some View {
+        HStack(spacing: 8) {
+            Label("Gaze focus", systemImage: "scope")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize()
+            Slider(value: $state.gazeStrictness, in: 0...1)
+            Text("±\(Int(state.gazeConeDegrees))°")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 36, alignment: .trailing)
+        }
     }
 
     private var footer: some View {
