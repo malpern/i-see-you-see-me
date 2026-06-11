@@ -55,7 +55,11 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
         }
 
         let yaw = (face.yaw?.doubleValue ?? 0) * 180 / .pi
-        let pitch = (face.pitch?.doubleValue ?? 0) * 180 / .pi
+        // Vision's pitch is coarse/quantized on landmark requests; the
+        // eye-line-to-nose distance changes continuously with head nod, so
+        // prefer that geometric estimate when landmarks are available.
+        let pitch = Self.pitchFromLandmarks(face)
+            ?? (face.pitch?.doubleValue ?? 0) * 180 / .pi
         let looking = abs(yaw) <= yawThresholdDegrees && abs(pitch) <= pitchThresholdDegrees
         let (closed, leftOpen, rightOpen) = Self.eyeMetrics(face)
         return AttentionEstimate(
@@ -68,6 +72,25 @@ final class VisionHeadPoseEstimator: AttentionEstimator {
             leftEyeOpenness: leftOpen,
             rightEyeOpenness: rightOpen
         )
+    }
+
+    /// Geometric pitch: the projected vertical gap between the eye line and
+    /// the nose (in face-box coordinates) shrinks/grows as the head nods.
+    /// Neutral gap ≈ 0.22; scaled to rough degrees.
+    private static func pitchFromLandmarks(_ face: VNFaceObservation) -> Double? {
+        guard let lm = face.landmarks,
+              let le = lm.leftEye, let re = lm.rightEye, let nose = lm.nose
+        else { return nil }
+
+        func centroidY(_ region: VNFaceLandmarkRegion2D) -> CGFloat {
+            let pts = region.normalizedPoints
+            guard !pts.isEmpty else { return 0.5 }
+            return pts.map(\.y).reduce(0, +) / CGFloat(pts.count)
+        }
+
+        let eyeLineY = (centroidY(le) + centroidY(re)) / 2
+        let gap = Double(eyeLineY - centroidY(nose))
+        return (gap - 0.22) * 160.0
     }
 
     /// Eye-aspect-ratio metrics: the eye contour's height relative to its
