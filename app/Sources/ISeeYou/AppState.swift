@@ -1,9 +1,23 @@
 import Foundation
 import SwiftUI
 
+/// How the eyes are drawn.
+enum EyeStyle: String, CaseIterable, Identifiable {
+    case male = "Male"
+    case female = "Female"
+    case round = "Round"
+    var id: String { rawValue }
+}
+
 /// Wires sensor → estimator → engine → UI, and owns the narration loop.
 @MainActor
 final class AppState: ObservableObject {
+    /// Eye rendering style, persisted.
+    @Published var eyeStyle: EyeStyle = EyeStyle(
+        rawValue: UserDefaults.standard.string(forKey: "eyeStyle") ?? ""
+    ) ?? .male {
+        didSet { UserDefaults.standard.set(eyeStyle.rawValue, forKey: "eyeStyle") }
+    }
     enum SourceKind: String, CaseIterable, Identifiable {
         case oak = "OAK-D Lite"
         case builtIn = "Built-in Camera"

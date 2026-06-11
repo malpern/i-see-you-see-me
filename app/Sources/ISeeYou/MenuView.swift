@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuView: View {
     @ObservedObject var state: AppState
     @Environment(\.openWindow) private var openWindow
+    @State private var showSettings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -11,7 +12,10 @@ struct MenuView: View {
             Divider()
             eventFeed
             Divider()
-            gazeFocus
+            if showSettings {
+                settings
+                Divider()
+            }
             footer
         }
         .padding(14)
@@ -92,17 +96,32 @@ struct MenuView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var gazeFocus: some View {
-        HStack(spacing: 8) {
-            Label("Gaze focus", systemImage: "scope")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize()
-            Slider(value: $state.gazeStrictness, in: 0...1)
-            Text("±\(Int(state.gazeConeDegrees))°")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 36, alignment: .trailing)
+    private var settings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Label("Gaze focus", systemImage: "scope")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                Slider(value: $state.gazeStrictness, in: 0...1)
+                Text("±\(Int(state.gazeConeDegrees))°")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+            }
+            HStack(spacing: 8) {
+                Label("Eye style", systemImage: "eye")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                Picker("", selection: $state.eyeStyle) {
+                    ForEach(EyeStyle.allCases) { style in
+                        Text(style.rawValue).tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
         }
     }
 
@@ -116,6 +135,12 @@ struct MenuView: View {
             .pickerStyle(.menu)
             .font(.caption)
             Spacer()
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { showSettings.toggle() }
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(.borderless)
             Button("Eyes") {
                 openWindow(id: "eyes")
                 NSApp.activate(ignoringOtherApps: true)

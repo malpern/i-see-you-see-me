@@ -122,8 +122,8 @@ struct EyesView: View {
                     let brow = browRaise(startled: startled)
 
                     HStack(spacing: 36) {
-                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: false)
-                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: true)
+                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: false, style: state.eyeStyle)
+                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: true, style: state.eyeStyle)
                     }
                     .background(
                         RadialGradient(
@@ -304,6 +304,7 @@ struct EyeAperture: Shape {
     var open: Double      // 0 closed ... ~1.2 wide
     var gazeY: Double     // -1...1 pupil vertical; lid follows gaze
     var mirrored: Bool    // screen-right eye: nose side on its left
+    var style: EyeStyle = .male
     var part: Part = .full
 
     var animatableData: AnimatablePair<Double, Double> {
@@ -320,25 +321,28 @@ struct EyeAperture: Shape {
         let l2: CGPoint
     }
 
-    static func anatomy(open: Double, gazeY: Double, mirrored: Bool, in rect: CGRect) -> Anatomy {
+    static func anatomy(open: Double, gazeY: Double, mirrored: Bool, style: EyeStyle, in rect: CGRect) -> Anatomy {
         let w = rect.width
         let h = rect.height
         let openC = max(0.0, open)
 
+        // Style differences: the female shape opens slightly taller and
+        // carries more canthal lift at the outer corner.
+        let travel: CGFloat = style == .female ? 0.41 : 0.38
+        let innerCornerY: CGFloat = style == .female ? 0.56 : 0.55
+        let outerCornerY: CGFloat = style == .female ? 0.465 : 0.49
+
         // Lids meet just below the horizontal midline when closed; the gaze
         // influence fades as the eye closes so the closed line is stable.
         let closeY = 0.54 * h
-        // Tall, round opening: generous upper-lid travel and a deeper
-        // lower lid.
-        let upperY = closeY - CGFloat(openC) * 0.38 * h
+        let upperY = closeY - CGFloat(openC) * travel * h
             + CGFloat(gazeY * min(1.0, openC)) * 0.05 * h
         // Lower lid sits at the iris's bottom edge when open — riding higher
         // crowds the pupil and reads sleepy.
         let lowerY = closeY + 0.19 * h * CGFloat(min(1.0, openC))
 
-        // Subtle canthal tilt: outer corner just slightly higher than inner.
-        let inner = CGPoint(x: mirrored ? 0 : w, y: 0.55 * h)
-        let outer = CGPoint(x: mirrored ? w : 0, y: 0.49 * h)
+        let inner = CGPoint(x: mirrored ? 0 : w, y: innerCornerY * h)
+        let outer = CGPoint(x: mirrored ? w : 0, y: outerCornerY * h)
 
         func lerpX(_ t: CGFloat) -> CGFloat { inner.x + (outer.x - inner.x) * t }
 
@@ -366,7 +370,7 @@ struct EyeAperture: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let a = Self.anatomy(open: open, gazeY: gazeY, mirrored: mirrored, in: rect)
+        let a = Self.anatomy(open: open, gazeY: gazeY, mirrored: mirrored, style: style, in: rect)
         var p = Path()
         switch part {
         case .full:
@@ -392,11 +396,20 @@ struct Eye: View {
     var dilation: Double      // 0 constricted ... 1 fully dilated
     var browRaise: Double     // 0 low/relaxed ... 1 shot up
     var mirrored: Bool        // right eye mirrors the brow tilt
+    var style: EyeStyle = .male
 
     /// True when the packaged app contains a compiled shader library.
     static let shaderAvailable = Bundle.main.url(forResource: "default", withExtension: "metallib") != nil
 
     var body: some View {
+        if style == .round {
+            roundEye.aspectRatio(1.05, contentMode: .fit)
+        } else {
+            anatomicalEye.aspectRatio(1.3, contentMode: .fit)
+        }
+    }
+
+    private var anatomicalEye: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
@@ -404,12 +417,12 @@ struct Eye: View {
             let irisD = min(w, h) * 0.58
             let pupilD = irisD * (0.38 + 0.26 * dilation)
             let anatomy = EyeAperture.anatomy(
-                open: openness, gazeY: pupilOffset.height, mirrored: mirrored, in: rect
+                open: openness, gazeY: pupilOffset.height, mirrored: mirrored, style: style, in: rect
             )
 
             ZStack {
-                eyeball(w: w, h: h, irisD: irisD, pupilD: pupilD)
-                    .clipShape(EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored))
+                eyeball(w: w, h: h, irisD: irisD, pupilD: pupilD, dressed: true)
+                    .clipShape(EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored, style: style))
                     .shadow(color: .black.opacity(0.45), radius: 10, y: 5)
                 lidLines(w: w, h: h)
                 lashes(h: h, anatomy: anatomy)
@@ -417,7 +430,41 @@ struct Eye: View {
             }
             .animation(.easeInOut(duration: 0.09), value: openness)
         }
-        .aspectRatio(1.3, contentMode: .fit)
+    }
+
+    /// The cartoon look: big circular eyes, a simple top lid, no lower lid,
+    /// no lashes or caruncle.
+    private var roundEye: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let irisD = min(w, h) * 0.56
+            let pupilD = irisD * (0.38 + 0.26 * dilation)
+
+            ZStack {
+                ZStack {
+                    eyeball(w: w, h: h, irisD: irisD, pupilD: pupilD, dressed: false)
+                    // Soft top shading, then the lid as a descending ellipse.
+                    Ellipse()
+                        .fill(
+                            LinearGradient(
+                                colors: [.black.opacity(0.25), .clear],
+                                startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)
+                            )
+                        )
+                    Ellipse()
+                        .fill(Color(red: 0.07, green: 0.08, blue: 0.10))
+                        .frame(width: w * 1.3, height: h * 1.3)
+                        .offset(y: -h * (0.15 + openness * 1.2))
+                }
+                .clipShape(Ellipse())
+                .overlay(Ellipse().stroke(Color(white: 0.25), lineWidth: 2))
+                .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
+
+                brow(w: w, h: h)
+            }
+            .animation(.easeInOut(duration: 0.09), value: openness)
+        }
     }
 
     /// Lid margin, supratarsal crease, and lower-lid line — the three
@@ -425,19 +472,19 @@ struct Eye: View {
     private func lidLines(w: CGFloat, h: CGFloat) -> some View {
         ZStack {
             // Upper lid margin: the visible thickness of the lid edge.
-            EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored, part: .upper)
+            EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored, style: style, part: .upper)
                 .stroke(
                     Color(red: 0.30, green: 0.26, blue: 0.24),
                     style: StrokeStyle(lineWidth: h * 0.045, lineCap: .round)
                 )
             // Supratarsal crease floating above the margin.
-            EyeAperture(open: min(1.4, openness + 0.38), gazeY: pupilOffset.height * 0.6, mirrored: mirrored, part: .upper)
+            EyeAperture(open: min(1.4, openness + 0.38), gazeY: pupilOffset.height * 0.6, mirrored: mirrored, style: style, part: .upper)
                 .stroke(
                     Color(white: 0.20),
                     style: StrokeStyle(lineWidth: h * 0.02, lineCap: .round)
                 )
             // Lower lid: present but quiet.
-            EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored, part: .lower)
+            EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored, style: style, part: .lower)
                 .stroke(
                     Color(white: 0.30).opacity(0.7),
                     style: StrokeStyle(lineWidth: h * 0.022, lineCap: .round)
@@ -446,17 +493,21 @@ struct Eye: View {
     }
 
     /// Lashes anchored to the actual upper-lid curve, flaring outward from
-    /// the temporal half, riding the lid through every blink.
+    /// the temporal half, riding the lid through every blink. The female
+    /// style gets a fuller, longer set.
     private func lashes(h: CGFloat, anatomy: EyeAperture.Anatomy) -> some View {
-        let ts: [CGFloat] = [0.74, 0.85, 0.95]
-        let angles: [Double] = mirrored ? [20, 33, 47] : [-20, -33, -47]
-        return ForEach(0..<3, id: \.self) { i in
+        let female = style == .female
+        let ts: [CGFloat] = female ? [0.66, 0.77, 0.87, 0.96] : [0.74, 0.85, 0.95]
+        let baseAngles: [Double] = female ? [14, 24, 36, 50] : [20, 33, 47]
+        let angles = mirrored ? baseAngles : baseAngles.map { -$0 }
+        let lashLen = h * (female ? 0.19 : 0.14)
+        return ForEach(0..<ts.count, id: \.self) { i in
             let pt = EyeAperture.upperPoint(t: ts[i], anatomy)
             Capsule()
                 .fill(Color(red: 0.16, green: 0.14, blue: 0.13))
-                .frame(width: h * 0.022, height: h * 0.14)
+                .frame(width: h * 0.022, height: lashLen)
                 .rotationEffect(.degrees(angles[i]), anchor: .bottom)
-                .position(x: pt.x, y: pt.y - h * 0.07)
+                .position(x: pt.x, y: pt.y - lashLen / 2)
         }
     }
 
@@ -477,7 +528,7 @@ struct Eye: View {
     }
 
     private func eyeball(
-        w: CGFloat, h: CGFloat, irisD: CGFloat, pupilD: CGFloat
+        w: CGFloat, h: CGFloat, irisD: CGFloat, pupilD: CGFloat, dressed: Bool
     ) -> some View {
             let maxOffX = (w - irisD) / 2 * 0.75
             let maxOffY = h * 0.14
@@ -550,21 +601,23 @@ struct Eye: View {
                 )
                 .animation(.spring(response: 0.45, dampingFraction: 0.8), value: dilation)
 
-                // Ambient occlusion: the soft shadow the upper lid casts on
-                // the eyeball, riding the lid edge itself.
-                EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored, part: .upper)
-                    .stroke(Color.black.opacity(0.32), lineWidth: h * 0.12)
-                    .blur(radius: h * 0.05)
-                    .offset(y: h * 0.015)
+                if dressed {
+                    // Ambient occlusion: the soft shadow the upper lid casts
+                    // on the eyeball, riding the lid edge itself.
+                    EyeAperture(open: openness, gazeY: pupilOffset.height, mirrored: mirrored, style: style, part: .upper)
+                        .stroke(Color.black.opacity(0.32), lineWidth: h * 0.12)
+                        .blur(radius: h * 0.05)
+                        .offset(y: h * 0.015)
 
-                // Caruncle: the small pink tissue at the inner corner.
-                Ellipse()
-                    .fill(Color(red: 0.78, green: 0.50, blue: 0.48))
-                    .frame(width: w * 0.06, height: h * 0.10)
-                    .position(
-                        x: (mirrored ? 0 : w) + (mirrored ? 1 : -1) * w * 0.022,
-                        y: h * 0.55
-                    )
+                    // Caruncle: the small pink tissue at the inner corner.
+                    Ellipse()
+                        .fill(Color(red: 0.78, green: 0.50, blue: 0.48))
+                        .frame(width: w * 0.06, height: h * 0.10)
+                        .position(
+                            x: (mirrored ? 0 : w) + (mirrored ? 1 : -1) * w * 0.022,
+                            y: h * 0.55
+                        )
+                }
             }
     }
 }
