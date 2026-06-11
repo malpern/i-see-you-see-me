@@ -33,13 +33,9 @@ final class AppState: ObservableObject {
     /// Discrete "big action" expressions — the only facial signals the eyes
     /// mirror. Subtle squints stay un-mirrored so the face keeps feeling
     /// autonomous rather than puppet-like.
-    @Published private(set) var personWinkLeft = false
-    @Published private(set) var personWinkRight = false
     @Published private(set) var personWide = false
     private var eyesWereClosed = false
     private var closedFrameStreak = 0
-    private var winkLeftStreak = 0
-    private var winkRightStreak = 0
     private var wideStreak = 0
 
     /// How tightly "looking at you" is scored: 0 = relaxed (±30° head cone),
@@ -172,15 +168,10 @@ final class AppState: ObservableObject {
                 self.closedFrameStreak = estimate.eyesClosed ? self.closedFrameStreak + 1 : 0
                 // ~3 frames at 15 fps: long enough to not be a blink.
                 self.personEyesClosed = self.closedFrameStreak >= 3
-                // Big-action detection with short streaks for stability:
-                // a wink is one eye clearly shut while the other is clearly
-                // open; wide is both well above relaxed, held a beat.
+                // Big-action detection with a short streak for stability:
+                // wide is both eyes well above relaxed, held a beat.
                 if let l = estimate.leftEyeOpenness, let r = estimate.rightEyeOpenness {
-                    self.winkLeftStreak = (l < 0.3 && r > 0.6) ? self.winkLeftStreak + 1 : 0
-                    self.winkRightStreak = (r < 0.3 && l > 0.6) ? self.winkRightStreak + 1 : 0
                     self.wideStreak = ((l + r) / 2 > 1.18) ? self.wideStreak + 1 : 0
-                    self.personWinkLeft = self.winkLeftStreak >= 2
-                    self.personWinkRight = self.winkRightStreak >= 2
                     self.personWide = self.wideStreak >= 2
                 }
             }

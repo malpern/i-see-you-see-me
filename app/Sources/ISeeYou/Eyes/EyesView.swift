@@ -47,17 +47,12 @@ struct EyesView: View {
 
     /// 1 = wide open, 0 = fully closed. Behavior is autonomous (state-driven
     /// openness, own blinks, sleepiness ramp) except for big actions, which
-    /// punch through: blinks, sustained closure, a deliberate wink (per
-    /// screen side, mirrored), and wide eyes.
-    private func opennessAt(_ now: Date, screenLeft: Bool) -> Double {
+    /// punch through: blinks, sustained both-eyes closure, and wide eyes.
+    private func opennessAt(_ now: Date) -> Double {
         if blink { return 0.0 }
         // Mirror sustained closure: your eyes shut, its eyes shut, until
         // yours open again.
         if state.personEyesClosed { return 0.0 }
-        // Mirror a wink on the matching side. Vision's anatomical labels
-        // come through the unmirrored camera, so the swap here is what makes
-        // it behave like a mirror on screen.
-        if screenLeft ? state.personWinkRight : state.personWinkLeft { return 0.0 }
         switch state.engineState {
         case .empty:
             let elapsed = now.timeIntervalSince(emptySince ?? now)
@@ -122,15 +117,13 @@ struct EyesView: View {
                     }
                     let offset = CGSize(width: base.width + drift.width, height: base.height + drift.height)
                     let startled = context.date < startledUntil
-                    // Mirror layout: your left eye drives the screen-left eye.
-                    let openL = opennessAt(context.date, screenLeft: true)
-                    let openR = opennessAt(context.date, screenLeft: false)
+                    let open = opennessAt(context.date)
                     let dilate = smoothDilation
                     let brow = browRaise(startled: startled)
 
                     HStack(spacing: 36) {
-                        Eye(pupilOffset: offset, openness: openL, dilation: dilate, browRaise: brow, mirrored: false)
-                        Eye(pupilOffset: offset, openness: openR, dilation: dilate, browRaise: brow, mirrored: true)
+                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: false)
+                        Eye(pupilOffset: offset, openness: open, dilation: dilate, browRaise: brow, mirrored: true)
                     }
                     .background(
                         RadialGradient(
@@ -167,9 +160,8 @@ struct EyesView: View {
         }
         .onChange(of: state.blinkCount) { _, _ in
             // You blink, it blinks. The tiny delay reads as a response,
-            // not a coincidence. Suppressed mid-wink — a wink is its own
-            // mirrored gesture, not a blink.
-            guard !blink, !state.personWinkLeft, !state.personWinkRight else { return }
+            // not a coincidence.
+            guard !blink else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) { runBlink() }
             nextBlinkAt = Date().addingTimeInterval(Double.random(in: 1.5...4.5))
         }
