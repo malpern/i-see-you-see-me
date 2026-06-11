@@ -157,7 +157,7 @@ struct EyesView: View {
                         Label(sourceBanner, systemImage: "camera.fill")
                             .foregroundStyle(.secondary)
                     } else {
-                        Text(isWatched ? "I see you see me." : statusLine)
+                        Text(isWatched ? "I see you, seeing me" : statusLine)
                             .foregroundStyle(isWatched ? .primary : .tertiary)
                     }
                 }
