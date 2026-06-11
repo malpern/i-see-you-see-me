@@ -420,14 +420,23 @@ struct Eye: View {
         maxOffX: CGFloat, maxOffY: CGFloat
     ) -> some View {
             ZStack {
-                // Sclera
-                Ellipse()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.white, Color(white: 0.86)],
-                            center: .center, startRadius: 0, endRadius: max(w, h) * 0.6
+                // Sclera — shader-lit as a sphere (warm off-white, corner
+                // vasculature, socket falloff); flat gradient as fallback.
+                if Self.shaderAvailable {
+                    Ellipse()
+                        .fill(.white)
+                        .colorEffect(ShaderLibrary.default.sclera(
+                            .float2(Float(w), Float(h))
+                        ))
+                } else {
+                    Ellipse()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.white, Color(white: 0.86)],
+                                center: .center, startRadius: 0, endRadius: max(w, h) * 0.6
+                            )
                         )
-                    )
+                }
 
                 // Iris + pupil (procedural Metal shader) + glints, travelling
                 // together. The shader draws fibers, collarette, limbal ring,

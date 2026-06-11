@@ -49,3 +49,39 @@ using namespace metal;
 
     return half4(half3(col), 1.0) * color.a;
 }
+
+// Sclera lit as a sphere: fake normals from the circular profile, a single
+// upper-left key light, warm off-white base, vascular warmth + faint veins
+// near the corners, and socket falloff toward the rim. The "3D" read comes
+// entirely from the lambert term — no geometry.
+[[ stitchable ]] half4 sclera(float2 position, half4 color, float2 size) {
+    float2 e = (position / size - 0.5) * 2.0;
+    float r = length(e);
+    if (color.a < 0.01) {
+        return half4(0.0);
+    }
+
+    float rc = clamp(r, 0.0, 1.0);
+    float z = sqrt(max(0.0, 1.0 - rc * rc));
+    float3 n = normalize(float3(e.x, e.y, z));
+    float3 lightDir = normalize(float3(-0.35, -0.5, 0.8));
+    float lambert = max(0.0, dot(n, lightDir));
+
+    float3 base = float3(0.985, 0.975, 0.952);
+    float3 col = base * (0.66 + 0.34 * lambert);
+
+    // Vascular warmth strongest at the horizontal corners.
+    float corner = smoothstep(0.55, 1.0, abs(e.x)) * (1.0 - 0.5 * abs(e.y));
+    col = mix(col, float3(0.93, 0.80, 0.76), corner * 0.30);
+
+    // Faint wiggly veins radiating from the corners.
+    float theta = atan2(e.y, e.x);
+    float veins = sin(theta * 9.0 + sin(r * 14.0 + theta * 3.0) * 1.5);
+    veins = smoothstep(0.86, 1.0, veins) * corner;
+    col = mix(col, float3(0.86, 0.58, 0.55), veins * 0.22);
+
+    // Socket falloff at the rim.
+    col *= 1.0 - smoothstep(0.72, 1.0, r) * 0.24;
+
+    return half4(half3(col), 1.0) * color.a;
+}
