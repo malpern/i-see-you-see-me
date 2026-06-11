@@ -207,6 +207,7 @@ final class AppState: ObservableObject {
         guard let url = Bundle.main.url(forResource: "mhh\(Int.random(in: 1...4))", withExtension: "wav") else { return }
         lastAckAt = now
         ackPlayer = try? AVAudioPlayer(contentsOf: url)
+        ackPlayer?.volume = 0.6
         ackPlayer?.play()
     }
 
