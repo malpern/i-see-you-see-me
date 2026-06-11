@@ -26,6 +26,10 @@ struct EyesView: View {
     /// Smoothed gaze-following offset: while you're present but looking
     /// elsewhere, the eyes turn toward where your head is pointed.
     @State private var gazeFollow = CGSize.zero
+    /// Transient chip naming the active sensor; shown on launch and on
+    /// source switches, then fades out.
+    @State private var sourceBanner: String?
+    @State private var bannerDismiss: Task<Void, Never>?
     /// When the room emptied — drives the sleepiness ramp.
     @State private var emptySince: Date?
 
@@ -146,7 +150,25 @@ struct EyesView: View {
             }
             .padding(28)
         }
-        .onAppear { state.start() }
+        .overlay(alignment: .top) {
+            if let sourceBanner {
+                Label(sourceBanner, systemImage: "camera.fill")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.top, 14)
+                    .transition(.opacity)
+            }
+        }
+        .onAppear {
+            state.start()
+            showSourceBanner(state.sourceKind.rawValue)
+        }
+        .onChange(of: state.sourceKind) { _, newSource in
+            showSourceBanner(newSource.rawValue)
+        }
         .onChange(of: state.blinkCount) { _, _ in
             // You blink, it blinks. The tiny delay reads as a response,
             // not a coincidence. Suppressed mid-wink — a wink is its own
@@ -267,6 +289,16 @@ struct EyesView: View {
 
     private var statusLine: String {
         state.engineState == .empty ? "…anyone there?" : "…"
+    }
+
+    private func showSourceBanner(_ name: String) {
+        bannerDismiss?.cancel()
+        withAnimation(.easeIn(duration: 0.25)) { sourceBanner = name }
+        bannerDismiss = Task {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.9)) { sourceBanner = nil }
+        }
     }
 }
 
