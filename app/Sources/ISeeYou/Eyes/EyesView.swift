@@ -328,24 +328,26 @@ struct EyeAperture: Shape {
         // Lids meet just below the horizontal midline when closed; the gaze
         // influence fades as the eye closes so the closed line is stable.
         let closeY = 0.54 * h
-        let upperY = closeY - CGFloat(openC) * 0.30 * h
+        // Tall, round opening: generous upper-lid travel and a deeper
+        // lower lid.
+        let upperY = closeY - CGFloat(openC) * 0.38 * h
             + CGFloat(gazeY * min(1.0, openC)) * 0.05 * h
-        let lowerY = closeY + 0.10 * h * CGFloat(min(1.0, openC))
+        let lowerY = closeY + 0.14 * h * CGFloat(min(1.0, openC))
 
-        // Positive canthal tilt: outer corner higher than inner.
-        let inner = CGPoint(x: mirrored ? 0 : w, y: 0.57 * h)
-        let outer = CGPoint(x: mirrored ? w : 0, y: 0.47 * h)
+        // Subtle canthal tilt: outer corner just slightly higher than inner.
+        let inner = CGPoint(x: mirrored ? 0 : w, y: 0.55 * h)
+        let outer = CGPoint(x: mirrored ? w : 0, y: 0.49 * h)
 
         func lerpX(_ t: CGFloat) -> CGFloat { inner.x + (outer.x - inner.x) * t }
 
-        // Upper arc peaks slightly nasal of center; lower bottoms temporal.
+        // Rounded arcs: upper peak near center, lower curve full.
         return Anatomy(
             inner: inner,
             outer: outer,
-            u1: CGPoint(x: lerpX(0.30), y: upperY - 0.02 * h),
-            u2: CGPoint(x: lerpX(0.72), y: upperY + 0.03 * h),
-            l1: CGPoint(x: lerpX(0.70), y: lowerY + 0.02 * h),
-            l2: CGPoint(x: lerpX(0.32), y: lowerY)
+            u1: CGPoint(x: lerpX(0.32), y: upperY),
+            u2: CGPoint(x: lerpX(0.70), y: upperY + 0.01 * h),
+            l1: CGPoint(x: lerpX(0.68), y: lowerY + 0.03 * h),
+            l2: CGPoint(x: lerpX(0.34), y: lowerY + 0.01 * h)
         )
     }
 
@@ -413,7 +415,7 @@ struct Eye: View {
             }
             .animation(.easeInOut(duration: 0.09), value: openness)
         }
-        .aspectRatio(1.5, contentMode: .fit)
+        .aspectRatio(1.3, contentMode: .fit)
     }
 
     /// Lid margin, supratarsal crease, and lower-lid line — the three
