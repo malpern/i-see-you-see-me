@@ -4,6 +4,11 @@ A real-time presence and attention sensing platform built on the [OAK-D Lite](ht
 
 Built for the WWDC26 YC hackathon.
 
+<p align="center">
+  <img src="docs/images/eyes.png" width="608" alt="The eyes window — a pair of shader-rendered eyes making eye contact, captioned 'I see you, seeing me'">
+</p>
+<p align="center"><em>The eyes wander idly until the presence engine says you're looking — then they look back.</em></p>
+
 ## Quick Start
 
 ```bash
@@ -34,6 +39,11 @@ Built-in camera ──(AVFoundation)──────────────�
 - **Consumers see only semantic events** (`person_entered`, `glance`, `attention_held`, …) — and the narration layer proves it: Apple's on-device foundation model describes your engagement from the event log alone, never seeing a single frame.
 
 The OAK-D Lite is treated as a smart sensor that produces observations. The host software is responsible for interpretation, emitting high-level semantic events like `look_started`, `attention_held`, and `person_entered` — never raw landmarks or depth maps.
+
+<p align="center">
+  <img src="docs/images/menu.png" width="386" alt="The menu bar panel — live attention state, on-device narration, and the semantic event feed">
+</p>
+<p align="center"><em>The menu bar panel: live state, head pose, the event feed — and the on-device model narrating it all from events alone.</em></p>
 
 ## Goals
 
