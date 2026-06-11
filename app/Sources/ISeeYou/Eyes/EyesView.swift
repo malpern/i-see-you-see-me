@@ -292,6 +292,40 @@ struct EyesView: View {
     }
 }
 
+/// The round style's upper eyelid: covers from the top down to a curved
+/// edge following the eye's curvature (the pre-anatomy milestone look).
+struct RoundLid: Shape {
+    var edge: CGFloat
+    var bulge: CGFloat
+    var edgeOnly: Bool = false
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(edge, bulge) }
+        set { edge = newValue.first; bulge = newValue.second }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        if edgeOnly {
+            p.move(to: CGPoint(x: 0, y: edge))
+            p.addQuadCurve(
+                to: CGPoint(x: rect.width, y: edge),
+                control: CGPoint(x: rect.midX, y: edge + bulge * 2)
+            )
+        } else {
+            p.move(to: CGPoint(x: 0, y: -rect.height))
+            p.addLine(to: CGPoint(x: 0, y: edge))
+            p.addQuadCurve(
+                to: CGPoint(x: rect.width, y: edge),
+                control: CGPoint(x: rect.midX, y: edge + bulge * 2)
+            )
+            p.addLine(to: CGPoint(x: rect.width, y: -rect.height))
+            p.closeSubpath()
+        }
+        return p
+    }
+}
+
 /// The palpebral fissure — the eye opening as anatomy actually draws it.
 /// An almond, not an ellipse: the upper lid arcs high with its peak slightly
 /// nasal of center, the lower lid is far flatter bottoming slightly temporal,
@@ -403,7 +437,7 @@ struct Eye: View {
 
     var body: some View {
         if style == .round {
-            roundEye.aspectRatio(1.05, contentMode: .fit)
+            roundEye.aspectRatio(1.15, contentMode: .fit)
         } else {
             anatomicalEye.aspectRatio(1.3, contentMode: .fit)
         }
@@ -432,19 +466,21 @@ struct Eye: View {
         }
     }
 
-    /// The cartoon look: big circular eyes, a simple top lid, no lower lid,
-    /// no lashes or caruncle.
+    /// The cartoon look from the pre-anatomy milestone: ellipse eyes with a
+    /// curved descending lid, a lid line, and three lashes — no lower lid.
     private var roundEye: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
-            let irisD = min(w, h) * 0.56
-            let pupilD = irisD * (0.38 + 0.26 * dilation)
+            let irisD = min(w, h) * 0.54
+            let pupilD = irisD * (0.34 + 0.24 * dilation)
+            let lidEdge = h * (0.08 + (1.0 - openness) * 0.96)
 
             ZStack {
                 ZStack {
                     eyeball(w: w, h: h, irisD: irisD, pupilD: pupilD, dressed: false)
-                    // Soft top shading, then the lid as a descending ellipse.
+                    // Soft top shading, then the lid descending to a curved
+                    // edge that follows the eye's curvature.
                     Ellipse()
                         .fill(
                             LinearGradient(
@@ -452,19 +488,44 @@ struct Eye: View {
                                 startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)
                             )
                         )
-                    Ellipse()
+                    RoundLid(edge: lidEdge, bulge: h * 0.10)
                         .fill(Color(red: 0.07, green: 0.08, blue: 0.10))
-                        .frame(width: w * 1.3, height: h * 1.3)
-                        .offset(y: -h * (0.15 + openness * 1.2))
                 }
                 .clipShape(Ellipse())
                 .overlay(Ellipse().stroke(Color(white: 0.25), lineWidth: 2))
                 .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
 
+                roundLidDressing(w: w, h: h, edge: lidEdge)
                 brow(w: w, h: h)
             }
             .animation(.easeInOut(duration: 0.09), value: openness)
         }
+    }
+
+    /// Lid line + lashes for the round style, clamped to the ellipse's width
+    /// at the lid's height so nothing floats beyond the eye outline.
+    private func roundLidDressing(w: CGFloat, h: CGFloat, edge: CGFloat) -> some View {
+        let yNorm = 1 - 2 * min(h, edge + h * 0.05) / h
+        let halfW = (w / 2) * sqrt(max(0.05, 1 - yNorm * yNorm))
+        let lineW = halfW * 2
+        let lashY = { (t: CGFloat) in edge + 2 * t * (1 - t) * (h * 0.10) * 2 }
+        let ts: [CGFloat] = mirrored ? [0.78, 0.88, 0.97] : [0.22, 0.12, 0.03]
+        let angles: [Double] = mirrored ? [22, 34, 48] : [-22, -34, -48]
+
+        return ZStack {
+            RoundLid(edge: edge, bulge: h * 0.08, edgeOnly: true)
+                .stroke(Color(white: 0.30), style: StrokeStyle(lineWidth: h * 0.03, lineCap: .round))
+                .frame(width: lineW, height: h)
+            ForEach(0..<3, id: \.self) { i in
+                Capsule()
+                    .fill(Color(red: 0.16, green: 0.14, blue: 0.13))
+                    .frame(width: h * 0.022, height: h * 0.13)
+                    .rotationEffect(.degrees(angles[i]), anchor: .bottom)
+                    .position(x: ts[i] * lineW, y: lashY(ts[i]) - h * 0.065)
+            }
+            .frame(width: lineW, height: h)
+        }
+        .frame(width: w, height: h)
     }
 
     /// Lid margin, supratarsal crease, and lower-lid line — the three
