@@ -71,6 +71,9 @@ final class AppState: ObservableObject {
     private func applyGazeStrictness() {
         visionEstimator.yawThresholdDegrees = gazeConeDegrees
         visionEstimator.pitchThresholdDegrees = gazeConeDegrees * 0.8
+        // One concept, one control: a stricter cone also means a snappier
+        // look-end — relaxed 0.9s down to 0.25s at full strict.
+        engine.lookEndDebounce = 0.9 - gazeStrictness * 0.65
     }
 
     func start() {
