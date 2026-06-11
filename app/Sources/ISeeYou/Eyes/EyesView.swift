@@ -23,6 +23,9 @@ struct EyesView: View {
     /// Low-pass-filtered dilation: shader parameters don't get SwiftUI
     /// animation, so the pupil breathes via this smoothed value instead.
     @State private var smoothDilation = 0.3
+    /// Smoothed gaze-following offset: while you're present but looking
+    /// elsewhere, the eyes turn toward where your head is pointed.
+    @State private var gazeFollow = CGSize.zero
     /// When the room emptied — drives the sleepiness ramp.
     @State private var emptySince: Date?
 
@@ -105,9 +108,14 @@ struct EyesView: View {
                         width: (sin(t * 1.9) * 0.6 + sin(t * 3.7 + 1.3) * 0.4) * driftAmp,
                         height: (cos(t * 2.3 + 0.7) * 0.6 + sin(t * 4.1) * 0.4) * driftAmp
                     )
-                    // Watched: aim at the person, not an abstract center —
-                    // and keep aiming as they move.
-                    let base = isWatched ? personTarget : fixation
+                    // Watched: aim at the person and keep aiming as they
+                    // move. Present-but-looking-away: follow where they're
+                    // looking. Empty room: wander.
+                    let base: CGSize = switch state.engineState {
+                    case .looking: personTarget
+                    case .present: gazeFollow
+                    case .empty: fixation
+                    }
                     let offset = CGSize(width: base.width + drift.width, height: base.height + drift.height)
                     let startled = context.date < startledUntil
                     // Mirror layout: your left eye drives the screen-left eye.
@@ -166,12 +174,22 @@ struct EyesView: View {
                 blinkIfDue(now)
                 let target = dilation(startled: now < startledUntil)
                 smoothDilation += (target - smoothDilation) * 0.22
+
+                // Follow the person's head direction while they look around.
+                let follow = CGSize(
+                    width: max(-0.85, min(0.85, state.lastYaw / 30.0)),
+                    height: max(-0.5, min(0.5, state.lastPitch / 35.0))
+                )
+                gazeFollow.width += (follow.width - gazeFollow.width) * 0.35
+                gazeFollow.height += (follow.height - gazeFollow.height) * 0.35
             }
         }
     }
 
     private func saccadeIfDue(_ now: Date) {
-        guard !isWatched, now >= nextSaccadeAt else { return }
+        // Wandering is for an empty room — with someone present the eyes
+        // either follow their gaze or lock onto them.
+        guard state.engineState == .empty, now >= nextSaccadeAt else { return }
 
         var newFixation: CGSize
         var holdRange: ClosedRange<Double> = 0.5...3.0
