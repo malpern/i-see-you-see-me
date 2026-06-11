@@ -195,9 +195,11 @@ struct EyesView: View {
 
                 // Follow the person's head direction while they look around.
                 // x negated so the on-screen gaze matches mirror expectations.
+                // Pitch gets ~2x the gain of yaw: heads nod through a much
+                // smaller range than they turn.
                 let follow = CGSize(
                     width: max(-0.85, min(0.85, -state.lastYaw / 30.0)),
-                    height: max(-0.5, min(0.5, state.lastPitch / 35.0))
+                    height: max(-0.7, min(0.7, -state.lastPitch / 15.0))
                 )
                 gazeFollow.width += (follow.width - gazeFollow.width) * 0.35
                 gazeFollow.height += (follow.height - gazeFollow.height) * 0.35
