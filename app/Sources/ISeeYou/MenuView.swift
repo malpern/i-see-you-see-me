@@ -110,6 +110,17 @@ struct MenuView: View {
                     .frame(width: 36, alignment: .trailing)
             }
             HStack(spacing: 8) {
+                Label("Sound", systemImage: "speaker.wave.2")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                Slider(value: $state.ackVolume, in: 0...1)
+                Text("\(Int(state.ackVolume * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+            }
+            HStack(spacing: 8) {
                 Label("Eye style", systemImage: "eye")
                     .font(.caption)
                     .foregroundStyle(.secondary)

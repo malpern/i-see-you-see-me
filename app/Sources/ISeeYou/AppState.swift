@@ -65,6 +65,11 @@ final class AppState: ObservableObject {
     /// Yaw half-angle (degrees) for the current strictness; shown in the UI.
     var gazeConeDegrees: Double { 30.0 - gazeStrictness * 22.0 }
 
+    /// Acknowledgment sound volume, persisted. Default: just audible.
+    @Published var ackVolume: Double = UserDefaults.standard.object(forKey: "ackVolume") as? Double ?? 0.15 {
+        didSet { UserDefaults.standard.set(ackVolume, forKey: "ackVolume") }
+    }
+
     private var source: SensorSource?
     // Accessed from the serial processing queue; threshold writes from the
     // main actor are benign (plain doubles, single reader).
@@ -207,7 +212,7 @@ final class AppState: ObservableObject {
         guard let url = Bundle.main.url(forResource: "mhh\(Int.random(in: 1...4))", withExtension: "wav") else { return }
         lastAckAt = now
         ackPlayer = try? AVAudioPlayer(contentsOf: url)
-        ackPlayer?.volume = 0.6
+        ackPlayer?.volume = Float(ackVolume)
         ackPlayer?.play()
     }
 
