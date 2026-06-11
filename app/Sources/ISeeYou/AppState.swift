@@ -82,9 +82,23 @@ final class AppState: ObservableObject {
         started = true
         applyGazeStrictness()
         watchdogTask = Task { [weak self] in
+            var probeCountdown = 0
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
-                self?.fallBackIfStarved()
+                guard let self else { return }
+                self.fallBackIfStarved()
+                // OAK is the preferred sensor: while on the fallback, probe
+                // every ~8s and climb back the moment it delivers frames.
+                if self.sourceKind == .builtIn {
+                    probeCountdown -= 1
+                    if probeCountdown <= 0 {
+                        probeCountdown = 4
+                        if await Self.oakIsDelivering() {
+                            self.sourceKind = .oak
+                            self.sensorStatus = "OAK-D back — switching over"
+                        }
+                    }
+                }
             }
         }
         engine.onEvent = { [weak self] event in
@@ -95,6 +109,25 @@ final class AppState: ObservableObject {
             narration = "On-device model unavailable: \(reason)"
         }
         restartSensor()
+    }
+
+    /// True when the OAK service is up AND sending frames (a listening port
+    /// with no camera attached doesn't count).
+    private nonisolated static func oakIsDelivering() async -> Bool {
+        let ws = URLSession.shared.webSocketTask(with: URL(string: "ws://127.0.0.1:8765")!)
+        ws.maximumMessageSize = 4 * 1024 * 1024
+        ws.resume()
+        defer { ws.cancel(with: .normalClosure, reason: nil) }
+        return await withTaskGroup(of: Bool.self) { group in
+            group.addTask { (try? await ws.receive()) != nil }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(2))
+                return false
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
     }
 
     /// If the OAK path goes quiet (service down, camera unplugged), switch
