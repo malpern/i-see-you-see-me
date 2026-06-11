@@ -75,3 +75,6 @@ logs/
 .build/
 *.app/
 .swiftpm/
+
+# DepthAI runtime cache
+sensor/.cache/
